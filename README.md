@@ -16,15 +16,15 @@
 ### Architecture Diagram
 
 <picture>
-<source media="(prefers-color-scheme: dark)" srcset="docs/siren_architecture_dark.png">
-<img src="docs/siren_architecture_light.png">
+<source media="(prefers-color-scheme: dark)" srcset="docs/siren_arch_dark.png">
+<img src="docs/siren_arch_light.png">
 </picture>
 
 ### Sequence Diagram
 
 <picture>
-<source media="(prefers-color-scheme: dark)" srcset="docs/siren_sequence_dark.png">
-<img src="docs/siren_sequence_light.png">
+<source media="(prefers-color-scheme: dark)" srcset="docs/siren_seq_dark.png">
+<img src="docs/siren_seq_light.png">
 </picture>
 
 ## Created By
