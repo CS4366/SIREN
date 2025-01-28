@@ -63,6 +63,8 @@
     {
       "name": "Launch All Services",
       "configurations": [
+        "Launch NOAA Service",
+        "Launch Tracking Service",
         "Launch API Service",
         "Launch Push Service",
         "Launch Frontend"
