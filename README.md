@@ -20,7 +20,6 @@
    - [Prerequisites](#prerequisites)
    - [Installation](#installation)
    - [Running the Project](#running-the-project)
-   - [Optional: Running Manually](#optional:-running-manually)
 3. [Created By](#created-by)
 
 # System Design
@@ -51,12 +50,18 @@ The following needs to be installed on your system:
 - [Node.js LTS](https://nodejs.org/en) (v22)
 - [Visual Studio Code (VSCode)](https://code.visualstudio.com/)
 
+Additionally:
+
+- Make sure you are properly logged into GitHub from the git cli
+- Make sure you can run `go version` and `node --version`
+- Start Docker Desktop before trying to run docker commands
+
 ## Installation
 
 1. **Clone the Repo**
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/CS4366/SIREN.git
 cd SIREN
 ```
 
