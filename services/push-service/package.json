@@ -1,0 +1,26 @@
+{
+  "name": "siren-push-service",
+  "version": "1.0.0",
+  "main": "dist/push.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/push.js",
+    "dev": "nodemon --exec ts-node src/push.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "amqplib": "^0.10.5",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.6",
+    "@types/node": "^22.12.0",
+    "@types/socket.io": "^3.0.1",
+    "nodemon": "^3.1.9",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}

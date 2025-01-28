@@ -1,0 +1,72 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Launch Frontend",
+      "url": "http://localhost:5173/",
+      "webRoot": "${workspaceFolder}/services/frontend-service/src",
+      "enableContentValidation": false,
+      "pathMapping": { "url": "/src/", "path": "${webRoot}/" },
+      "preLaunchTask": "serve frontend",
+      "postDebugTask": "kill"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Launch API Service",
+      "runtimeExecutable": "nodemon",
+      "runtimeArgs": [
+        "--config",
+        "${workspaceFolder}/services/api-service/nodemon.json"
+      ],
+      "cwd": "${workspaceFolder}/services/api-service",
+      "console": "internalConsole",
+      "restart": true,
+      "postDebugTask": "kill"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Launch Push Service",
+      "runtimeExecutable": "nodemon",
+      "runtimeArgs": [
+        "--config",
+        "${workspaceFolder}/services/push-service/nodemon.json"
+      ],
+      "cwd": "${workspaceFolder}/services/push-service",
+      "console": "internalConsole",
+      "restart": true,
+      "postDebugTask": "kill"
+    },
+    {
+      "type": "go",
+      "request": "launch",
+      "name": "Launch Tracking Service",
+      "mode": "auto",
+      "program": "${workspaceFolder}/services/tracking-service/",
+      "args": [],
+      "env": {}
+    },
+    {
+      "type": "go",
+      "request": "launch",
+      "name": "Launch NOAA Service",
+      "mode": "auto",
+      "program": "${workspaceFolder}/services/noaa-service/",
+      "args": [],
+      "env": {}
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Launch All Services",
+      "configurations": [
+        "Launch API Service",
+        "Launch Push Service",
+        "Launch Frontend"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+services:
+  # SIREN NWWS Connection Service
+  noaa-service:
+    build: ./services/noaa-service
+    networks:
+      - siren-network
+    environment:
+      - RABBITMQ_URL=amqp://127.0.0.1
+      - NWWS_USER=your_nwws_user
+      - NWWS_PASSWORD=your_nwws_pass
+      - NWWS_NICKNAME=your_nwws_nickname
+  # SIREN Alert Tracking Service
+  tracking-service:
+    build: ./services/tracking-service
+    networks:
+      - siren-network
+    environment:
+      - RABBITMQ_URL=amqp://localhost
+  # SIREN Frontend
+  frontend-service:
+    build: ./services/frontend-service
+    networks:
+      - siren-network
+    ports:
+      - "8080:8080"
+  api-service:
+    build: ./services/api-service
+    networks:
+      - siren-network
+    ports:
+      - "3000:3000"
+  push-service:
+    build: ./services/push-service
+    networks:
+      - siren-network
+    ports:
+      - "4000:4000"
+    environment:
+      - RABBITMQ_URL=amqp://localhost
+  # RabbitMQ Message Queue
+  message-queue:
+    image: rabbitmq:4.0-management
+    ports:
+      - 5672:5672
+      - 15672:15672
+    restart: always
+    networks:
+      - siren-network
+  # REDIS Cache
+  redis:
+    image: redis:latest
+    ports:
+      - 6379:6379
+    restart: always
+    networks:
+      - siren-network
+networks:
+  siren-network:
+    driver: bridge
