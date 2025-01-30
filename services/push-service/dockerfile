@@ -11,9 +11,6 @@ COPY . .
 # Build the application
 RUN npm run build
 
-# Ensure the dist directory is correctly placed
-RUN mkdir -p dist && cp -r /app/dist ./dist
-
 # Install only production dependencies to reduce image size
 RUN npm prune --production
 
