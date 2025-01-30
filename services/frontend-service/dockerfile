@@ -9,4 +9,7 @@ RUN npm run build
 
 EXPOSE 8080
 
+LABEL org.opencontainers.image.source=https://github.com/CS4366/SIREN
+LABEL org.opencontainers.image.title="SIREN Frontend Service"
+
 CMD ["serve","-p","8080","-s", "dist"]

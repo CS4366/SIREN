@@ -13,5 +13,9 @@ COPY --from=build /app/package*.json ./
 COPY --from=build /app/dist ./dist
 
 RUN npm install --production
+
+LABEL org.opencontainers.image.source=https://github.com/CS4366/SIREN
+LABEL org.opencontainers.image.title="SIREN Push Service"
+
 EXPOSE 4000
 CMD ["node", "dist/push.js"]

@@ -2,7 +2,13 @@ github.com/rabbitmq/amqp091-go v1.10.0 h1:STpn5XsHlHGcecLmMFCtg7mqq0RnD+zFr4uzuk
 github.com/rabbitmq/amqp091-go v1.10.0/go.mod h1:Hy4jKW5kQART1u+JkDTF9YYOQUHXqMuhrgxOEeS7G4o=
 github.com/xmppo/go-xmpp v0.2.9 h1:yHaFR2BlbCAYbnKB5YpXIqHZBKk4xqmpJsoYeJZygxI=
 github.com/xmppo/go-xmpp v0.2.9/go.mod h1:jYd0LiK1vwCpO8boRVqOk8Yn2pnDIjs5K7g7ryEeQdI=
+github.com/xmppo/go-xmpp v0.2.10 h1:yxCWXuah73nrA30ffhyqzv1ab+VmvxCEdx8yFxIHQlA=
+github.com/xmppo/go-xmpp v0.2.10/go.mod h1:Vi5xYz5oKoRnf8iXNiAyKr3VKtvEmdTAnvJ8zDf+gkA=
 golang.org/x/crypto v0.31.0 h1:ihbySMvVjLAeSH1IbfcRTkD/iNscyz8rGzjF/E5hV6U=
 golang.org/x/crypto v0.31.0/go.mod h1:kDsLvtWBEx7MV9tJOj9bnXsPbxwJQ6csT/x4KIN4Ssk=
+golang.org/x/crypto v0.32.0 h1:euUpcYgM8WcP71gNpTqQCn6rC2t6ULUPiOzfWaXVVfc=
+golang.org/x/crypto v0.32.0/go.mod h1:ZnnJkOaASj8g0AjIduWNlq2NRxL0PlBrbKVyZ6V/Ugc=
 golang.org/x/net v0.32.0 h1:ZqPmj8Kzc+Y6e0+skZsuACbx+wzMgo5MQsJh9Qd6aYI=
 golang.org/x/net v0.32.0/go.mod h1:CwU0IoeOlnQQWJ6ioyFrfRuomB8GKF6KbYXZVyeXNfs=
+golang.org/x/net v0.34.0 h1:Mb7Mrk043xzHgnRM88suvJFwzVrRfHEHJEl5/71CKw0=
+golang.org/x/net v0.34.0/go.mod h1:di0qlW3YNM5oh6GqDGQr92MyTozJPmybPK4Ev/Gm31k=

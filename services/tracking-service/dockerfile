@@ -7,4 +7,7 @@ RUN go mod download
 COPY *.go ./
 RUN CGO_ENABLED=0 GOOS=linux go build -o /docker-tracking-service
 
+LABEL org.opencontainers.image.source=https://github.com/CS4366/SIREN
+LABEL org.opencontainers.image.title="SIREN Tracking Service"
+
 CMD ["/docker-tracking-service"]

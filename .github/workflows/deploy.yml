@@ -1,0 +1,153 @@
+name: deploy
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build ${{ matrix.app.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app:
+          [
+            {
+              name: "NOAA Service",
+              path: "services/noaa-service",
+              build-type: "go",
+            },
+            {
+              name: "Tracking Service",
+              path: "services/tracking-service",
+              build-type: "go",
+            },
+            {
+              name: "Frontend Service",
+              path: "services/frontend-service",
+              build-type: "node",
+            },
+            {
+              name: "API Service",
+              path: "services/api-service",
+              build-type: "node",
+            },
+            {
+              name: "Push Service",
+              path: "services/push-service",
+              build-type: "node",
+            },
+          ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - uses: dorny/paths-filter@v3
+        id: changes
+        name: Check for Folder Changes
+        with:
+          filters: |
+            src:
+              - '.github/workflows/build.yml'
+              - '${{ matrix.app.path }}/**'
+
+      - name: Set up Go
+        if: steps.changes.outputs.src == 'true' && ${{ matrix.app.build-type }} == 'go'
+        uses: actions/setup-go@v2
+        with:
+          go-version: "1.23.4"
+
+      - name: Set up Node.js
+        if: steps.changes.outputs.src == 'true' && ${{ matrix.app.build-type }} == 'node'
+        uses: actions/setup-node@v2
+        with:
+          node-version: "22"
+
+      - name: Build
+        if: steps.changes.outputs.src == 'true'
+        run: |
+          cd ${{ matrix.app.path }}
+          if [ "${{ matrix.app.build-type }}" == "go" ]; then
+            go mod tidy
+            go build
+          else
+            npm install
+            npm run build
+          fi
+
+  deploy:
+    name: Deploy ${{ matrix.app.name }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app:
+          [
+            { name: "NOAA Service", service: "noaa-service" },
+            { name: "Tracking Service", service: "tracking-service" },
+            { name: "Frontend Service", service: "frontend-service" },
+            { name: "API Service", service: "api-service" },
+            { name: "Push Service", service: "push-service" },
+          ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@v3
+        id: changes
+        name: Check for Folder Changes
+        with:
+          filters: |
+            src:
+              - '.github/workflows/deploy.yml'
+              - '${{ matrix.app.service }}/**'
+
+      - name: Determine next version
+        uses: paulhatch/semantic-version@v5.4.0
+        id: semver
+        if: ${{ github.event_name == 'push' && steps.changes.outputs.src == 'true' }}
+        with:
+          change_path: ".github/workflows services/${{ matrix.app.service }}"
+          tag_prefix: "${{ matrix.app.service }}-v"
+          major_pattern: "(MAJOR)"
+          minor_pattern: "(MINOR)"
+          version_format: "${major}.${minor}.${patch}"
+
+      - name: Set up QEMU (for ARM builds)
+        if: steps.changes.outputs.src == 'true'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+
+      - name: Set up Docker Buildx
+        if: steps.changes.outputs.src == 'true'
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to Github Packages
+        if: steps.changes.outputs.src == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Image
+        if: steps.changes.outputs.src == 'true'
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: services/${{ matrix.app.service }}/dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/cs4366/siren-${{ matrix.app.service }}:latest
+
+      - name: Create Git Tag
+        if: steps.changes.outputs.src == 'true'
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git tag -a "${{ matrix.app.service }}-v${{ steps.semver.outputs.version }}" -m "Release ${{ matrix.app.service }} v${{ steps.semver.outputs.version }}"
+          git push origin "${{ matrix.app.service }}-v${{ steps.semver.outputs.version }}"
