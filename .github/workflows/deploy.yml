@@ -142,7 +142,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/CS4366/siren-${{ matrix.app.service }}:latest
+            ghcr.io/cs4366/siren-${{ matrix.app.service }}:latest
 
       - name: Create Git Tag
         if: steps.changes.outputs.src == 'true'
