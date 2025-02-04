@@ -78,6 +78,9 @@ jobs:
   deploy:
     name: Deploy ${{ matrix.app.name }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
     needs: build
     strategy:
       matrix:
