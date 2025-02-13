@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/joho/godotenv"
 	ampq "github.com/rabbitmq/amqp091-go"
 	"github.com/xmppo/go-xmpp"
 )
@@ -113,31 +114,6 @@ type ValueName string
 type Value string
 
 // ---------------------------------------------------------
-
-type VTEC struct {
-	// Raw VTEC string
-	StringValue string
-	// Identifies the following product and VTEC code string types, most of the time O, E, and T
-	FixedIdentifier string
-	/*
-		NEW - New, CON - Continued, EXA - Extended in Area, EXT - Extended in Time, EXB - Extended in Area and Changed in Time
-		UPG - Upgraded, CAN - Cancelled, EXP - Expired, ROU - Routine, COR - Correction
-	*/
-	Action string
-	// The 4 letter office identifier
-	OfficeID string
-	// A 2 letter code that identifies the hazard type, will need to be converted to appropriate NWS code.
-	Phenomenon string
-	// The significance of the hazard, W - Warning, A - Watch, Y - Advisory
-	Significance string
-	// The ETN is a four-digit number assigned to keep track of how an event (as defined in Section 1.4) is addressed by various VTEC actions and/or products issued over the lifetime of the event.
-	ETN string
-	// The start time of the event
-	EventBeginTime string
-	// The end time of the event
-	EventEndTime string
-}
-
 // Message queue connection
 var ch *ampq.Channel
 var trackingQueue ampq.Queue
@@ -166,11 +142,16 @@ func connectToMQ() {
 func main() {
 	log.Println("SIREN - Service for Instant Relay of Emergency Notifications")
 
+	log.Panicln("Loading environment variables...")
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
+
 	log.Println("Starting connection to message queue...")
 	connectToMQ()
 
 	log.Println("Starting connection to NWWS ingress server...")
-	// Create an XMPP client
 	options := xmpp.Options{
 		Host:          "nwws-oi.weather.gov:5222",
 		User:          os.Getenv("NWWS_USER"),
@@ -250,68 +231,23 @@ func main() {
 
 }
 
-func extractVTECValue(xmlStr string) (string, error) {
-	re := regexp.MustCompile(`<parameter>\s*<valueName>\s*VTEC\s*</valueName>\s*<value>\s*(.*?)\s*</value>\s*</parameter>`)
-	matches := re.FindAllStringSubmatch(xmlStr, -1)
-	if len(matches) == 0 {
-		return "", fmt.Errorf("no VTEC values found")
-	}
-
-	for _, match := range matches {
-		if len(match) > 1 {
-			value, err := parseVTECValue(match[1])
-			if err != nil {
-				return "", err
-			}
-
-			if value.Action == "NEW" {
-				return value.StringValue, nil
-			}
-		}
-	}
-	return "", fmt.Errorf("no VTEC values found")
-}
-
-func parseVTECValue(vtecValue string) (*VTEC, error) {
-	values := strings.Split(strings.Trim(vtecValue, "/"), ".")
-
-	if len(values) != 7 {
-		return nil, fmt.Errorf("VTEC value not in correct format")
-	}
-
-	return &VTEC{
-		StringValue:     vtecValue,
-		FixedIdentifier: values[0],
-		Action:          values[1],
-		OfficeID:        values[2],
-		Phenomenon:      values[3],
-		Significance:    values[4],
-		ETN:             values[5],
-		EventBeginTime:  strings.Split(values[6], "-")[0],
-		EventEndTime:    strings.Split(values[6], "-")[1],
-	}, nil
-}
-
 func handleAlertXML(alerts <-chan string) {
 	for alertXML := range alerts {
-		// Extract the VTEC value from the alert XML
-		vtecValue, err := extractVTECValue(alertXML)
+		var alert Alert
+		err := xml.Unmarshal([]byte(alertXML), &alert)
 		if err != nil {
-			log.Println("No valid VTEC found. Skipping alert.")
+			log.Printf("Failed to unmarshal alert: %v\n", err)
 			continue
 		}
 
-		// Parse the VTEC value
-		vtec, err := parseVTECValue(vtecValue)
+		//Send alert to message queue
+		err = ch.Publish("", trackingQueue.Name, false, false, ampq.Publishing{
+			ContentType: "text/plain",
+			Body:        []byte(alertXML),
+		})
 		if err != nil {
-			log.Println("Error parsing VTEC value. Skipping alert.")
-			continue
+			log.Printf("Failed to publish alert to message queue: %v\n", err)
 		}
-
-		//Create a mostly unique event ID
-		eventId := fmt.Sprintf("%s-%s%s-%s", vtec.OfficeID, vtec.Phenomenon, vtec.Significance, vtec.ETN)
-
-		log.Printf("Event ID: %s | Action: %s\n", eventId, vtec.Action)
 
 	}
 }

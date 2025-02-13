@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/joho/godotenv"
 	ampq "github.com/rabbitmq/amqp091-go"
 )
 
@@ -44,6 +45,11 @@ func connectToMQ() {
 
 func main() {
 	fmt.Println("Starting tracking service...")
+
+	fmt.Println("Loading environment variables...")
+	err := godotenv.Load()
+
+	fmt.Println("Connecting to message queue...")
 	connectToMQ()
 
 	//Consume messages from the tracking queue
