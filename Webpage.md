@@ -5,9 +5,10 @@
         <img alt="Texas Tech Computer Science - Whitacre College of Engineering" src="https://raw.githubusercontent.com/jaxcksn/jaxcksn/main/files/ttu_cs_light.png" width="40%" align="center">
 </picture>
 
-# Team 10: Webpage
+# CS4366 Team 10: Group Webpage
 
 </div>
+
 ### Group Members:
 
 <div align="center">
