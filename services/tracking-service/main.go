@@ -9,25 +9,25 @@ import (
 	ampq "github.com/rabbitmq/amqp091-go"
 )
 
+var conn *ampq.Connection
 var ch *ampq.Channel
 var trackingQueue ampq.Queue
 var liveQueue ampq.Queue
 
 // Connect to message queue
 func connectToMQ() {
+	var err error
 	//Dial to the message queue
-	conn, err := ampq.Dial(os.Getenv("RABBITMQ_URL"))
+	conn, err = ampq.Dial(os.Getenv("RABBITMQ_URL"))
 	if err != nil {
 		log.Fatalf("Failed to connect to the message queue")
 		return
 	}
-	defer conn.Close()
 
 	ch, err = conn.Channel()
 	if err != nil {
 		log.Fatalf("Failed to open a channel")
 	}
-	defer ch.Close()
 
 	//Connect to the tracking queue
 	trackingQueue, err = ch.QueueDeclare("tracking", true, false, false, false, nil)
@@ -44,13 +44,16 @@ func connectToMQ() {
 }
 
 func main() {
-	fmt.Println("Starting tracking service...")
-
-	fmt.Println("Loading environment variables...")
 	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
 
+	fmt.Println("Starting tracking service...")
 	fmt.Println("Connecting to message queue...")
 	connectToMQ()
+	defer conn.Close()
+	defer ch.Close()
 
 	//Consume messages from the tracking queue
 	msgs, err := ch.Consume(trackingQueue.Name, "", true, false, false, false, nil)

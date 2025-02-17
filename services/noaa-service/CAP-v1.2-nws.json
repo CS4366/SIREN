@@ -1,0 +1,504 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CAP Alert",
+  "type": "object",
+  "properties": {
+    "identifier": {
+      "type": "string"
+    },
+    "sender": {
+      "type": "string"
+    },
+    "sent": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2}))$"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["Actual", "Exercise", "System", "Test", "Draft"]
+    },
+    "msgType": {
+      "type": "string",
+      "enum": ["Alert", "Update", "Cancel", "Ack", "Error"]
+    },
+    "source": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["Public", "Restricted", "Private"]
+    },
+    "restriction": {
+      "type": "string"
+    },
+    "addresses": {
+      "type": "string"
+    },
+    "code": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^IPAWSv\\d+\\.\\d+$"
+      }
+    },
+    "note": {
+      "type": "string"
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/reference"
+      }
+    },
+    "incidents": {
+      "type": "string"
+    },
+    "info": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/info"
+      }
+    }
+  },
+  "required": [
+    "identifier",
+    "sender",
+    "sent",
+    "status",
+    "msgType",
+    "source",
+    "scope",
+    "code",
+    "info"
+  ],
+  "additionalProperties": false,
+  "definitions": {
+    "reference": {
+      "type": "object",
+      "properties": {
+        "sender": {
+          "type": "string"
+        },
+        "identifier": {
+          "type": "string"
+        },
+        "sent": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2}))$"
+        }
+      },
+      "required": ["sender", "identifier", "sent"],
+      "additionalProperties": false
+    },
+    "info": {
+      "type": "object",
+      "properties": {
+        "language": {
+          "type": "string",
+          "enum": ["en-US", "es-US"]
+        },
+        "categories": {
+          "type": "object",
+          "properties": {
+            "Geo": {
+              "type": "boolean"
+            },
+            "Met": {
+              "type": "boolean"
+            },
+            "Safety": {
+              "type": "boolean"
+            },
+            "Rescue": {
+              "type": "boolean"
+            },
+            "Fire": {
+              "type": "boolean"
+            },
+            "Health": {
+              "type": "boolean"
+            },
+            "Env": {
+              "type": "boolean"
+            },
+            "Transport": {
+              "type": "boolean"
+            },
+            "Infra": {
+              "type": "boolean"
+            },
+            "CBRNE": {
+              "type": "boolean"
+            },
+            "Other": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "Geo",
+            "Met",
+            "Safety",
+            "Rescue",
+            "Fire",
+            "Health",
+            "Env",
+            "Transport",
+            "Infra",
+            "CBRNE",
+            "Other"
+          ],
+          "additionalProperties": false
+        },
+        "event": {
+          "type": "string"
+        },
+        "responseType": {
+          "type": "string",
+          "enum": [
+            "Shelter",
+            "Evacuate",
+            "Prepare",
+            "Execute",
+            "Avoid",
+            "Monitor",
+            "Assess",
+            "AllClear",
+            "None"
+          ]
+        },
+        "urgency": {
+          "type": "string",
+          "enum": ["Immediate", "Expected", "Future", "Past", "Unknown"]
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["Extreme", "Severe", "Moderate", "Minor", "Unknown"]
+        },
+        "certainty": {
+          "type": "string",
+          "enum": ["Observed", "Likely", "Possible", "Unlikely", "Unknown"]
+        },
+        "audience": {
+          "type": "string"
+        },
+        "eventCode": {
+          "type": "object",
+          "properties": {
+            "SAME": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "NWS": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            }
+          },
+          "required": ["SAME", "NWS"],
+          "additionalProperties": false
+        },
+        "effective": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2}))$"
+        },
+        "onset": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2}))$"
+        },
+        "expires": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2}))$"
+        },
+        "senderName": {
+          "type": "string"
+        },
+        "headline": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "instruction": {
+          "type": "string"
+        },
+        "web": {
+          "type": "string",
+          "format": "uri"
+        },
+        "contact": {
+          "type": "string"
+        },
+        "parameters": {
+          "$ref": "#/definitions/parameters"
+        },
+        "resource": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/resource"
+          }
+        },
+        "area": {
+          "$ref": "#/definitions/area"
+        }
+      },
+      "required": [
+        "language",
+        "categories",
+        "responseType",
+        "urgency",
+        "severity",
+        "certainty",
+        "eventCode",
+        "effective",
+        "onset",
+        "expires",
+        "senderName",
+        "headline",
+        "description",
+        "instruction",
+        "web",
+        "contact",
+        "area"
+      ],
+      "additionalProperties": false
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "AWIPSidentifier": {
+          "type": "string",
+          "pattern": "^\\d{3}[A-Z ]{3}$"
+        },
+        "WMOidentifier": {
+          "type": "string"
+        },
+        "eventMotionDescription": {
+          "type": "object",
+          "properties": {
+            "Timestamp": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2}))$"
+            },
+            "direction": {
+              "type": "string",
+              "pattern": "^(?!000)\\d{3}$"
+            },
+            "speed": {
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d?)$"
+            },
+            "location": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "lat": {
+                    "type": "number"
+                  },
+                  "lon": {
+                    "type": "number"
+                  }
+                },
+                "required": ["lat", "lon"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["Timestamp", "direction", "speed", "location"],
+          "additionalProperties": false
+        },
+        "windThreat": {
+          "type": "string",
+          "enum": ["Radar Indicated", "Observed"]
+        },
+        "maxWindGust": {
+          "type": "number"
+        },
+        "hailThreat": {
+          "type": "string",
+          "enum": ["Radar Indicated", "Observed"]
+        },
+        "maxHailSize": {
+          "type": "number"
+        },
+        "thunderstormDamageThreat": {
+          "type": "string",
+          "enum": ["Considerable", "Destructive"]
+        },
+        "tornadoDetection": {
+          "type": "string",
+          "enum": ["Radar Indicated", "Observed", "Possible"]
+        },
+        "tornadoDamageThreat": {
+          "type": "string",
+          "enum": ["Considerable", "Destructive"]
+        },
+        "flashFloodDetection": {
+          "type": "string",
+          "enum": ["Radar Indicated", "Radar & Gauge Indicated", "Observed"]
+        },
+        "flashFloodDamageThreat": {
+          "type": "string",
+          "enum": ["Considerable", "Catastrophic"]
+        },
+        "snowSquallDetection": {
+          "type": "string",
+          "enum": ["Radar Indicated", "Observed"]
+        },
+        "snowSquallImpact": {
+          "type": "string",
+          "enum": ["Significant"]
+        },
+        "waterspoutDetection": {
+          "type": "string",
+          "enum": ["Observed", "Possible"]
+        },
+        "blockChannels": {
+          "type": "object",
+          "properties": {
+            "CMAS": {
+              "type": "boolean"
+            },
+            "EAS": {
+              "type": "boolean"
+            },
+            "NWEM": {
+              "type": "boolean"
+            },
+            "Public": {
+              "type": "boolean"
+            }
+          },
+          "required": ["CMAS", "EAS", "NWEM", "Public"],
+          "additionalProperties": false
+        },
+        "EAS-ORG": {
+          "type": "string",
+          "maxLength": 3
+        },
+        "VTEC": {
+          "type": "string"
+        },
+        "eventEndingTime": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2}))$"
+        },
+        "WEAHandling": {
+          "type": "string",
+          "enum": ["Imminent Threat"]
+        },
+        "CMAMText": {
+          "type": "string"
+        },
+        "CMAMlongtext": {
+          "type": "string"
+        },
+        "expiredReferences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/reference"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "resource": {
+      "type": "object",
+      "properties": {
+        "resourceDesc": {
+          "type": "string"
+        },
+        "mimeType": {
+          "type": "string"
+        },
+        "size": {
+          "type": "number"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "derefUri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "digest": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resourceDesc",
+        "mimeType",
+        "size",
+        "uri",
+        "derefUri",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "area": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "polygon": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["Polygon"]
+            },
+            "coordinates": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "minItems": 4,
+                "items": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          },
+          "required": ["type", "coordinates"],
+          "additionalProperties": false
+        },
+        "geocodes": {
+          "type": "object",
+          "properties": {
+            "UGC": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}\\d{3}$"
+              }
+            },
+            "SAME": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^\\d{6}$"
+              }
+            }
+          },
+          "required": ["UGC", "SAME"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["description", "geocodes"],
+      "additionalProperties": false
+    }
+  }
+}
