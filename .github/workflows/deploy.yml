@@ -105,7 +105,7 @@ jobs:
           filters: |
             src:
               - '.github/workflows/deploy.yml'
-              - '${{ matrix.app.service }}/**'
+              - 'services/${{ matrix.app.service }}/**'
 
       - name: Determine next version
         uses: paulhatch/semantic-version@v5.4.0
