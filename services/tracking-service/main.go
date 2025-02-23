@@ -1,13 +1,22 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"trackingService/CAP"
 
 	"github.com/joho/godotenv"
 	ampq "github.com/rabbitmq/amqp091-go"
+	"github.com/redis/go-redis/v9"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
+
+var ctx = context.Background()
 
 var conn *ampq.Connection
 var ch *ampq.Channel
@@ -43,6 +52,43 @@ func connectToMQ() {
 
 }
 
+var client *mongo.Client
+var alertsCollection *mongo.Collection
+
+func ConnectToMongo() {
+	//Connect to MongoDB
+	uri := os.Getenv("MONGO_URI")
+	if uri == "" {
+		fmt.Printf("Warning: MONGO_URI not set. Using default value, this may not work.\n")
+		uri = "mongodb://localhost:27017"
+	}
+
+	var err error
+	client, err = mongo.Connect(options.Client().ApplyURI(uri))
+	if err != nil {
+		log.Fatalf("Failed to connect to MongoDB")
+	}
+
+	alertsCollection = client.Database("siren").Collection("alerts")
+}
+
+var r *redis.Client
+
+func ConnectToRedis() {
+	uri := os.Getenv("REDIS_URI")
+	if uri == "" {
+		fmt.Printf("Warning: REDIS_URI not set. Using default value, this may not work.\n")
+		uri = "localhost:6379"
+	}
+
+	r = redis.NewClient(&redis.Options{
+		Addr:     uri,
+		Password: "",
+		DB:       0,
+	})
+
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -51,9 +97,20 @@ func main() {
 
 	fmt.Println("Starting tracking service...")
 	fmt.Println("Connecting to message queue...")
+
 	connectToMQ()
 	defer conn.Close()
 	defer ch.Close()
+
+	ConnectToMongo()
+	defer func() {
+		if err := client.Disconnect(context.TODO()); err != nil {
+			panic(err)
+		}
+	}()
+
+	//ConnectToRedis()
+	//defer r.Close()
 
 	//Consume messages from the tracking queue
 	msgs, err := ch.Consume(trackingQueue.Name, "", true, false, false, false, nil)
@@ -66,14 +123,6 @@ func main() {
 	go func() {
 		for d := range msgs {
 			handleAlertMessage(string(d.Body))
-			//Publish the message to the live queue
-			err := ch.Publish("", liveQueue.Name, false, false, ampq.Publishing{
-				ContentType: "text/plain",
-				Body:        d.Body,
-			})
-			if err != nil {
-				log.Panicf("Failed to publish a message to the live queue")
-			}
 		}
 	}()
 
@@ -82,6 +131,49 @@ func main() {
 }
 
 func handleAlertMessage(msg string) {
-	//EDIT ME TO HANDLE ALERT TRACKING
-	fmt.Println("Handling alert message: ", msg)
+	var alert CAP.Alert
+	//Unmarshal the message
+	err := json.Unmarshal([]byte(msg), &alert)
+	if err != nil {
+		log.Printf("SKIPPING: Failed to unmarshal the message: %s\n", err)
+		return
+	}
+
+	log.Printf("Received alert: %s\n", alert.Identifier)
+
+	//Check if VTEC is available
+	var alertInfo CAP.Info
+	if len(alert.Info) > 0 {
+		if alert.Info[0].Language == "en-US" {
+			alertInfo = alert.Info[0]
+		} else {
+			alertInfo = alert.Info[1]
+		}
+	} else {
+		log.Printf("SKIPPING: No info available for alert: %s\n", alert.Identifier)
+		return
+	}
+	fmt.Printf("%v\n", alertInfo.Parameters.VTEC)
+
+	var existingAlert CAP.Alert
+	err = alertsCollection.FindOne(context.TODO(), bson.M{"identifier": alert.Identifier}).Decode(&existingAlert)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			//Insert the alert into the database
+			_, err = alertsCollection.InsertOne(context.TODO(), alert)
+			if err != nil {
+				log.Printf("Failed to insert alert into the database: %s\n", err)
+				return
+			}
+		} else {
+			log.Printf("Failed to query the database: %s\n", err)
+			return
+		}
+	} else {
+		log.Printf("SKIPPING: Alert already exists in the database: %s\n", alert.Identifier)
+		return
+	}
+
+	log.Printf("Alert inserted into the database: %s\n", alert.Identifier)
+
 }

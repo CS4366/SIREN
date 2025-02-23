@@ -394,7 +394,7 @@ func convertEventCode(codes []*EventCodeXML) EventCode {
 		switch code.CapValueName {
 		case "SAME":
 			ec.SAME = code.CapValue
-		case "NWS":
+		case "NationalWeatherService":
 			ec.NWS = code.CapValue
 		}
 	}
