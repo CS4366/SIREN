@@ -25,21 +25,32 @@ We made the decision not to assign "roles" and everyone is expected to contribut
 
 ---
 
-### Group Meetings:
+### Group Meetings & Schedule:
 
 We have decided to meet irregularly, and communicate via group message on an as-needed basis. We use an agile-like format and will use Jira to schedule and communicate tasks.
 
-#### Upcoming Meetings
+#### Upcoming Meetings:
 
-Our pre-presentation meeting is on Feb 18th, in which we will rehearse our presentation and make sure all the deliverables for Stage 1 are ready.
+Our next meeting with be on March 6th, where we will:
 
-There will also be a meeting after the presentation to align on the engineering, and wrap up the remaining implementation details. (Not yet scheduled)
+- Discuss and plan for Stage 2
+- Discuss our plan for the alert tracking service
+- Discuss a potential UI mockup design
 
-#### Past Meetings
+#### Past Meetings:
 
+##### Jan 30th, 2025
 Our initial meeting was on Jan 30th, in which we planned and discussed the project. After this meeting the following was accomplished:
 
 - Created and scaffolded our Github Repo and Organization.
 - Created the base for our powerpoint presentation.
 - Created the base for our our IEEE proposal document.
 - Setup and joined Jira.
+
+##### Feb 18th, 2025
+
+Our pre-presentation meeting was on Feb 18th, in which we went through our presentation and make sure all the deliverables for Stage 1 are ready.
+
+- Refined our presentation.
+- Determined who would read which part of the application.
+- Talked a bit about the overall architecture.
