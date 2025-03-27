@@ -1,14 +1,23 @@
-# Tracking Service Build Configuration
-FROM golang:1.23.4
+# Build Stage: Use the full Golang image to build the binary
+FROM golang:1.23.4 AS builder
 
 WORKDIR /app
+
 COPY go.mod go.sum ./
-
 RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /docker-tracking-service
 
-LABEL org.opencontainers.image.source=https://github.com/CS4366/SIREN
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o docker-tracking-service .
+
+# Final Stage: Use a minimal base image
+FROM scratch
+
+COPY --from=builder /app/docker-tracking-service /docker-tracking-service
+
+# Add image metadata labels
+LABEL org.opencontainers.image.source="https://github.com/CS4366/SIREN"
 LABEL org.opencontainers.image.title="SIREN Tracking Service"
 
+# Specify the binary as the entrypoint
 CMD ["/docker-tracking-service"]

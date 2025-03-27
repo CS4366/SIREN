@@ -1,16 +1,22 @@
-# Frontend Service Build Configuration
-FROM node:22-alpine
+# Build Stage: Build the assets using Node
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm install
-RUN npm i -g serve
 COPY . .
 RUN npm run build
 
-EXPOSE 8080
+# Final Stage: Use a minimal Nginx image to serve the static files
+FROM nginx:alpine
 
-LABEL org.opencontainers.image.source=https://github.com/CS4366/SIREN
+# Remove default Nginx static files and copy your build output
+RUN rm -rf /usr/share/nginx/html/*
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+LABEL org.opencontainers.image.source="https://github.com/CS4366/SIREN"
 LABEL org.opencontainers.image.title="SIREN Frontend Service"
 
-CMD ["serve","-p","8080","-s", "dist"]
+CMD ["nginx", "-g", "daemon off;"]

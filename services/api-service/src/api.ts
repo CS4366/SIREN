@@ -2,7 +2,7 @@ import express, { Application, Request, Response } from "express";
 
 // Init express application
 const app: Application = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3030;
 
 // Use middleware JSON
 app.use(express.json());

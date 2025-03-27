@@ -1,12 +1,20 @@
 # NOAA Service Build Configuration
-FROM golang:1.23.4
+#Build Stage
+FROM golang:1.23.4 AS builder
 
 WORKDIR /app
-COPY go.mod go.sum ./
 
+COPY go.mod go.sum ./
 RUN go mod download
+
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /docker-noaa-service
+
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o docker-noaa-service .
+
+# Final Stage: Use a minimal base image
+FROM scratch
+
+COPY --from=builder /app/docker-noaa-service /docker-noaa-service
 
 LABEL org.opencontainers.image.source=https://github.com/CS4366/SIREN
 LABEL org.opencontainers.image.title="SIREN NOAA Service"
