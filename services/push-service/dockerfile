@@ -22,4 +22,4 @@ LABEL org.opencontainers.image.title="SIREN Push Service"
 EXPOSE 4000
 
 # Start the application
-CMD ["node", "dist/api.js"]
+CMD ["node", "dist/push.js"]
