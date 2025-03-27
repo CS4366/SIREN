@@ -154,3 +154,8 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git tag -a "${{ matrix.app.service }}-v${{ steps.semver.outputs.version }}" -m "Release ${{ matrix.app.service }} v${{ steps.semver.outputs.version }}"
           git push origin "${{ matrix.app.service }}-v${{ steps.semver.outputs.version }}"
+
+      - name: Write Summary
+        if: steps.changes.outputs.src == 'true'
+        run: |
+          echo "Deployed ${{ matrix.app.name }} v${{ steps.semver.outputs.version }} to ghcr.io/cs4366/siren-${{ matrix.app.service }}:latest" >> $GITHUB_STEP_SUMMARY
