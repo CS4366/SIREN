@@ -51,10 +51,13 @@ func connectToMQ() {
 }
 
 func main() {
-	err := godotenv.Load(".env")
-	if err != nil {
-		log.Fatal("Error loading .env file")
+	if os.Getenv("ENV") != "PROD" {
+		err := godotenv.Load(".env")
+		if err != nil {
+			log.Fatalf("Error loading .env file")
+		}
 	}
+
 	log.Println("SIREN - Service for Instant Relay of Emergency Notifications")
 
 	// Connect to message queue

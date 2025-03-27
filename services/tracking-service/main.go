@@ -45,9 +45,9 @@ func connectToMQ() {
 	}
 
 	//Connect to the live queue
-	liveQueue, err = ch.QueueDeclare("live", true, false, false, false, nil)
+	liveQueue, err = ch.QueueDeclare("push", true, false, false, false, nil)
 	if err != nil {
-		log.Fatalf("Failed to declare the live queue")
+		log.Fatalf("Failed to declare the push queue")
 	}
 
 }
@@ -90,9 +90,11 @@ func ConnectToRedis() {
 }
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error loading .env file")
+	if os.Getenv("ENV") != "PROD" {
+		err := godotenv.Load()
+		if err != nil {
+			log.Fatalf("Error loading .env file")
+		}
 	}
 
 	fmt.Println("Starting tracking service...")

@@ -11,7 +11,7 @@ const io = new Server(Number(PORT), {
 });
 
 const startService = async () => {
-  await connectToMQ("live", (msg) => {
+  await connectToMQ("push", (msg) => {
     io.emit("live", msg);
   });
 
