@@ -1,35 +1,47 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { Route, Routes, useHref, useLocation, useNavigate } from "react-router";
+import "./App.css";
+import { HeroUIProvider, Tab, Tabs } from "@heroui/react";
+import HomePage from "./components/pages/HomePage";
+import DataPage from "./components/pages/DataPage";
+import MapPage from "./components/pages/MapPage";
+import SettingsPage from "./components/pages/SettingsPage";
+import { useTheme } from "@heroui/use-theme";
+import { useWindowSize } from "@uidotdev/usehooks";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const navigate = useNavigate();
+  const size = useWindowSize();
+  const { pathname } = useLocation();
+  const { theme } = useTheme();
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <HeroUIProvider navigate={navigate} useHref={useHref}>
+      <main className={theme + " text-foreground bg-background"}>
+        <div className="flex h-screen md:flex-row flex-col w-full">
+          <div className="px-4 py-2 flex md:justify-start justify-center md:items-start items-center">
+            <Tabs
+              isVertical={(size.width ?? 1000) > 768}
+              selectedKey={pathname}
+              className="justify-center items-center"
+            >
+              <Tab key="/" href="/" title="Home" />
+              <Tab key="/data" href="/data" title="Data" />
+              <Tab key="/map" href="/map" title="Map" />
+              <Tab key="/settings" href="/settings" title="Settings" />
+            </Tabs>
+          </div>
+          <div className="flex w-full justify-center items-center h-screen">
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/data" element={<DataPage />} />
+              <Route path="/map" element={<MapPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Routes>
+          </div>
+        </div>
+      </main>
+    </HeroUIProvider>
+  );
 }
 
-export default App
+export default App;
