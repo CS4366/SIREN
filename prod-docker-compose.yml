@@ -1,51 +1,78 @@
 services:
   # SIREN NWWS Connection Service
   noaa-service:
-    build: ./services/noaa-service
+    image: ghcr.io/cs4366/siren-noaa-service:latest
     networks:
       - siren-network
     environment:
-      - RABBITMQ_URL=amqp://127.0.0.1
-      - NWWS_USER=your_nwws_user
-      - NWWS_PASSWORD=your_nwws_pass
-      - NWWS_NICKNAME=your_nwws_nickname
+      - ENV=PROD
+      - RABBITMQ_URL=amqp://rabbitmq
+      - NWWS_USER=REPLACE_ME
+      - NWWS_PASSWORD=REPLACE_ME
+      - NWWS_NICKNAME=SIREN.TTU.PROD
+    depends_on:
+      message-queue:
+        condition: service_healthy
   # SIREN Alert Tracking Service
   tracking-service:
-    build: ./services/tracking-service
+    image: ghcr.io/cs4366/siren-tracking-service:latest
     networks:
       - siren-network
     environment:
-      - RABBITMQ_URL=amqp://localhost
+      - ENV=PROD
+      - RABBITMQ_URL=amqp://rabbitmq
+      - MONGO_URI=mongodb://mongodb:27017
+    depends_on:
+      message-queue:
+        condition: service_healthy
   # SIREN Frontend
   frontend-service:
-    build: ./services/frontend-service
+    image: ghcr.io/cs4366/siren-frontend-service:latest
     networks:
       - siren-network
     ports:
-      - "8080:8080"
+      - "8080:80"
+  # SIREN API Service
   api-service:
-    build: ./services/api-service
+    image: ghcr.io/cs4366/siren-api-service:latest
     networks:
       - siren-network
     ports:
-      - "3000:3000"
+      - "3030:3030"
+    environment:
+      - PORT=3030
+    depends_on:
+      - db
+      - redis
+  # SIREN Push Service
   push-service:
-    build: ./services/push-service
+    image: ghcr.io/cs4366/siren-push-service:latest
     networks:
       - siren-network
     ports:
       - "4000:4000"
     environment:
-      - RABBITMQ_URL=amqp://localhost
+      - RABBITMQ_URL=amqp://rabbitmq
+    depends_on:
+      message-queue:
+        condition: service_healthy
+
   # RabbitMQ Message Queue
   message-queue:
     image: rabbitmq:4.0-management
+    container_name: rabbitmq
     ports:
       - 5672:5672
       - 15672:15672
     restart: always
     networks:
       - siren-network
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # REDIS Cache
   redis:
     image: redis:latest
@@ -54,6 +81,81 @@ services:
     restart: always
     networks:
       - siren-network
+
+  # MongoDB Database
+  db:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - 27017:27017
+    restart: always
+    networks:
+      - siren-network
+    volumes:
+      - mongodb_data:/data/db
+  # Prometheus - This service collects metrics from the other services
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: always
+    networks:
+      - siren-network
+  # cadvisor - This service collects metrics from the and containers
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    restart: always
+    ports:
+      - "8082:8082"
+    command:
+      - "-port=8082"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - siren-network
+  # Node Exporter - This service collects system metrics from the host machine
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    expose:
+      - 9100
+    networks:
+      - siren-network
+  # Grafana Dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - 3000:3000
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: always
+    environment:
+      - GF_SERVER_SERVE_FROM_SUB_PATH=false
+      - GF_SERVER_ROOT_URL=https://siren-dashboard.jaxcksn.dev/
+    networks:
+      - siren-network
+
 networks:
   siren-network:
     driver: bridge
+
+volumes:
+  grafana_data:
+  mongodb_data:
