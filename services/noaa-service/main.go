@@ -18,6 +18,12 @@ import (
 	"github.com/xmppo/go-xmpp"
 )
 
+func debugLog(msg string) {
+	if os.Getenv("ENV") != "PROD" {
+		log.Println(msg)
+	}
+}
+
 // Message queue connection
 var conn *ampq.Connection
 var ch *ampq.Channel
@@ -112,7 +118,7 @@ func main() {
 
 		client, err := options.NewClient()
 		if err != nil {
-			log.Printf("Error creating XMPP client (NWWS may be offline): %v", err)
+			log.Printf("\nError creating XMPP client (NWWS may be offline): %v", err)
 		} else {
 			log.Println("Logged into NWWS XMPP client")
 
@@ -120,13 +126,13 @@ func main() {
 			// TODO: We'll probably want a way to reconcile the last 50 messages so we don't resend alerts. The REDIS cache is a good place to start.
 			_, err = client.JoinMUC("NWWS@conference.nwws-oi.weather.gov", nickname, xmpp.StanzaHistory, 50, nil)
 			if err != nil {
-				log.Printf("Failed to join NWWS chatroom: %v", err)
+				log.Printf("\nFailed to join NWWS chatroom: %v", err)
 			} else {
 				log.Println("Joined NWWS chatroom")
 
 				err = processChatroomMessages(client, alerts)
 				if err != nil {
-					log.Printf("Client disconnected with error: %v", err)
+					log.Printf("\nClient disconnected with error: %v", err)
 				}
 			}
 
@@ -134,7 +140,7 @@ func main() {
 		}
 
 		// Ensure backoff is handled correctly
-		log.Printf("Disconnected. Reconnecting in %v...", backoff)
+		log.Printf("\nDisconnected. Reconnecting in %v...", backoff)
 		time.Sleep(backoff)
 		backoff = increaseBackoff(backoff, maxBackoff)
 	}
@@ -155,7 +161,7 @@ func processChatroomMessages(client *xmpp.Client, alerts chan string) error {
 	for {
 		stanza, err := client.Recv()
 		if err != nil {
-			log.Printf("Error receiving XMPP stanza: %v", err)
+			log.Printf("\nError receiving XMPP stanza: %v", err)
 			return err
 		}
 		switch v := stanza.(type) {
@@ -220,7 +226,7 @@ func handleAlertXML(alerts <-chan string) {
 			log.Printf("Failed to convert alert to JSON: %v\n", err)
 			continue
 		}
-		log.Printf("CAP Found: %s\n\n", string(alertJsonBytes))
+		debugLog(fmt.Sprintf("\nCAP Found: %s\n\n", string(alertJsonBytes)))
 
 		//Marshall to JSON and Send alert to message queue
 		err = ch.Publish("", trackingQueue.Name, false, false, ampq.Publishing{

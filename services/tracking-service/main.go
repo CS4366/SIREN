@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"trackingService/CAP"
+	"trackingService/VTEC"
 
 	"github.com/joho/godotenv"
 	ampq "github.com/rabbitmq/amqp091-go"
@@ -15,6 +16,12 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
+
+func debugLog(msg string) {
+	if os.Getenv("ENV") != "PROD" {
+		log.Println(msg)
+	}
+}
 
 var ctx = context.Background()
 
@@ -132,16 +139,29 @@ func main() {
 	<-forever
 }
 
+func getCanonicalIdentifier(vtec *VTEC.VTEC) string {
+	//Func to get the canonical identifier from the vtec
+	canonicalIdentifier := fmt.Sprintf("%s%s-%s-%d", vtec.Phenomena, vtec.Significance, vtec.OfficeIdentifier, vtec.EventTrackingNumber)
+	return canonicalIdentifier
+}
+
+func determineAlertState(alert CAP.Alert, vtec *VTEC.VTEC) string {
+	// Func to determine the alert state from the vtec
+	canonicalIdentifier := getCanonicalIdentifier(vtec)
+
+	return canonicalIdentifier
+}
+
 func handleAlertMessage(msg string) {
 	var alert CAP.Alert
 	//Unmarshal the message
 	err := json.Unmarshal([]byte(msg), &alert)
 	if err != nil {
-		log.Printf("SKIPPING: Failed to unmarshal the message: %s\n", err)
+		debugLog(fmt.Sprintf("SKIPPING: Failed to unmarshal the message: %s", err))
 		return
 	}
 
-	log.Printf("Received alert: %s\n", alert.Identifier)
+	debugLog(fmt.Sprintf("Received alert: %s", alert.Identifier))
 
 	//Check if VTEC is available
 	var alertInfo CAP.Info
@@ -152,10 +172,20 @@ func handleAlertMessage(msg string) {
 			alertInfo = alert.Info[1]
 		}
 	} else {
-		log.Printf("SKIPPING: No info available for alert: %s\n", alert.Identifier)
+		debugLog(fmt.Sprintf("SKIPPING: No info available for alert: %s", alert.Identifier))
 		return
 	}
-	fmt.Printf("%v\n", alertInfo.Parameters.VTEC)
+
+	vtec, err := VTEC.ParseVTEC(alertInfo.Parameters.VTEC)
+	if err != nil {
+		debugLog(fmt.Sprintf("SKIPPING: Failed to parse VTEC: %s", err))
+	}
+
+	if vtec != nil {
+		alert.SirenIdentifier = getCanonicalIdentifier(vtec)
+	} else {
+		alert.SirenIdentifier = alert.Identifier
+	}
 
 	var existingAlert CAP.Alert
 	err = alertsCollection.FindOne(context.TODO(), bson.M{"identifier": alert.Identifier}).Decode(&existingAlert)
@@ -163,19 +193,36 @@ func handleAlertMessage(msg string) {
 		if err == mongo.ErrNoDocuments {
 			//Insert the alert into the database
 			_, err = alertsCollection.InsertOne(context.TODO(), alert)
+			//Handle the error
 			if err != nil {
-				log.Printf("Failed to insert alert into the database: %s\n", err)
+				debugLog(fmt.Sprintf("Failed to insert alert into the database: %s", err))
 				return
 			}
+
+			//Publish the alert to the live queue
+			alertJson, err := json.Marshal(alert)
+			if err != nil {
+				debugLog(fmt.Sprintf("Failed to marshal alert to JSON: %s", err))
+				return
+			}
+			err = ch.Publish("", liveQueue.Name, false, false, ampq.Publishing{
+				ContentType: "application/json",
+				Body:        alertJson,
+			})
+
+			if err != nil {
+				debugLog(fmt.Sprintf("Failed to publish alert to the live queue: %s", err))
+				return
+			}
+
 		} else {
-			log.Printf("Failed to query the database: %s\n", err)
+			debugLog(fmt.Sprintf("Failed to query the database: %s", err))
 			return
 		}
 	} else {
-		log.Printf("SKIPPING: Alert already exists in the database: %s\n", alert.Identifier)
+		debugLog(fmt.Sprintf("SKIPPING: Alert already exists in the database: %s", alert.Identifier))
 		return
 	}
 
-	log.Printf("Alert inserted into the database: %s\n", alert.Identifier)
-
+	debugLog(fmt.Sprintf("Alert inserted into the database: %s", alert.Identifier))
 }

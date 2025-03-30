@@ -407,9 +407,6 @@ func convertParameters(oldParams []*ParameterXML) *Parameters {
 	}
 	newParams := &Parameters{}
 	for _, param := range oldParams {
-		print(param.CapValueName)
-		print(param.CapValue)
-
 		switch param.CapValueName {
 		case "AWIPSidentifier":
 			newParams.AWIPSidentifier = param.CapValue

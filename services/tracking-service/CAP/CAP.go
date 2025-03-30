@@ -3,20 +3,21 @@ package CAP
 import "time"
 
 type Alert struct {
-	Identifier  string      `json:"identifier"`
-	Sender      string      `json:"sender"`
-	Sent        time.Time   `json:"sent"`
-	Status      string      `json:"status"`
-	MsgType     string      `json:"msgType"`
-	Source      string      `json:"source"`
-	Scope       string      `json:"scope"`
-	Restriction string      `json:"restriction,omitempty"`
-	Addresses   string      `json:"addresses,omitempty"`
-	Code        []string    `json:"code"`
-	Note        string      `json:"note,omitempty"`
-	References  []Reference `json:"references,omitempty"`
-	Incidents   string      `json:"incidents,omitempty"`
-	Info        []Info      `json:"info"`
+	Identifier      string      `json:"identifier"`
+	SirenIdentifier string      `json:"sirenIdentifier"`
+	Sender          string      `json:"sender"`
+	Sent            time.Time   `json:"sent"`
+	Status          string      `json:"status"`
+	MsgType         string      `json:"msgType"`
+	Source          string      `json:"source"`
+	Scope           string      `json:"scope"`
+	Restriction     string      `json:"restriction,omitempty"`
+	Addresses       string      `json:"addresses,omitempty"`
+	Code            []string    `json:"code"`
+	Note            string      `json:"note,omitempty"`
+	References      []Reference `json:"references,omitempty"`
+	Incidents       string      `json:"incidents,omitempty"`
+	Info            []Info      `json:"info"`
 }
 
 type Reference struct {
