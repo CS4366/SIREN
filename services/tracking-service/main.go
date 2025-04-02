@@ -33,11 +33,13 @@ import (
  *               Prometheus Metrics
  *=============================================**/
 
-var processingTime = prometheus.NewSummary(
-	prometheus.SummaryOpts{
-		Name: "alert_processing_time_seconds",
-		Help: "Time taken to process an alert",
+var processingTime = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "alert_processing_time_seconds",
+		Help:    "Time taken to process an alert",
+		Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 	},
+	[]string{"worker_id"},
 )
 
 var alertsReceived = prometheus.NewCounter(prometheus.CounterOpts{
@@ -381,7 +383,7 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 	defer func() {
 		// Record the processing time so the dashboard can track the time
 		elapsed := time.Since(start)
-		processingTime.Observe(elapsed.Seconds())
+		processingTime.WithLabelValues(fmt.Sprintf("%d", workerId)).Observe(elapsed.Seconds())
 	}()
 
 	// Ensure the lock is released when the function exits
