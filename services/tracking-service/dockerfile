@@ -13,6 +13,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o docker-tracking-s
 # Final Stage: Use a minimal base image
 FROM scratch
 
+# Need to copy the CA certificates from the builder stage
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /app/docker-tracking-service /docker-tracking-service
 
 # Add image metadata labels
