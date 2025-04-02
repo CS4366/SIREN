@@ -22,7 +22,7 @@ func GetCanonicalIdentifier(vtec *NWS.VTEC) string {
 		vtec.Significance,
 		vtec.OfficeIdentifier,
 		vtec.EventTrackingNumber,
-		vtec.StartDateTime.Format("2006"),
+		vtec.EndDateTime.Format("2006"),
 	)
 	return canonicalIdentifier
 }
