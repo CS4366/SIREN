@@ -124,7 +124,8 @@ type Alert struct {
 	Note        string      `json:"note,omitempty"`
 	References  []Reference `json:"references,omitempty"`
 	Incidents   string      `json:"incidents,omitempty"`
-	Info        []Info      `json:"info"`
+	Info        Info        `json:"info"`
+	InfoSpanish *Info       `json:"infoSpanish,omitempty"`
 }
 
 type Reference struct {
@@ -270,15 +271,28 @@ func ConvertXMLToJsonStruct(old *AlertXML) (*Alert, error) {
 
 	newAlert.References = convertReferences(old.References)
 
-	for _, oinfo := range old.Info {
-		if oinfo == nil {
-			continue
+	if len(old.Info) > 0 {
+		for _, oinfo := range old.Info {
+			if oinfo == nil {
+				continue
+			}
+			ni, err := convertInfo(oinfo)
+			if err != nil {
+				return nil, err
+			}
+			if oinfo.Language == "es-US" {
+				newAlert.InfoSpanish = &ni
+			} else {
+				newAlert.Info = ni
+			}
 		}
-		ni, err := convertInfo(oinfo)
+	} else {
+		ni, err := convertInfo(old.Info[0])
 		if err != nil {
 			return nil, err
 		}
-		newAlert.Info = append(newAlert.Info, ni)
+		newAlert.Info = ni
+		newAlert.InfoSpanish = nil
 	}
 
 	return newAlert, nil
@@ -407,9 +421,6 @@ func convertParameters(oldParams []*ParameterXML) *Parameters {
 	}
 	newParams := &Parameters{}
 	for _, param := range oldParams {
-		print(param.CapValueName)
-		print(param.CapValue)
-
 		switch param.CapValueName {
 		case "AWIPSidentifier":
 			newParams.AWIPSidentifier = param.CapValue
