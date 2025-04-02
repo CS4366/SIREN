@@ -1,23 +1,26 @@
-package CAP
+package NWS
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type Alert struct {
-	Identifier      string      `json:"identifier"`
-	SirenIdentifier string      `json:"sirenIdentifier"`
-	Sender          string      `json:"sender"`
-	Sent            time.Time   `json:"sent"`
-	Status          string      `json:"status"`
-	MsgType         string      `json:"msgType"`
-	Source          string      `json:"source"`
-	Scope           string      `json:"scope"`
-	Restriction     string      `json:"restriction,omitempty"`
-	Addresses       string      `json:"addresses,omitempty"`
-	Code            []string    `json:"code"`
-	Note            string      `json:"note,omitempty"`
-	References      []Reference `json:"references,omitempty"`
-	Incidents       string      `json:"incidents,omitempty"`
-	Info            []Info      `json:"info"`
+	Identifier  string      `json:"identifier"`
+	Sender      string      `json:"sender"`
+	Sent        time.Time   `json:"sent"`
+	Status      string      `json:"status"`
+	MsgType     string      `json:"msgType"`
+	Source      string      `json:"source"`
+	Scope       string      `json:"scope"`
+	Restriction string      `json:"restriction,omitempty"`
+	Addresses   string      `json:"addresses,omitempty"`
+	Code        []string    `json:"code"`
+	Note        string      `json:"note,omitempty"`
+	References  []Reference `json:"references,omitempty"`
+	Incidents   string      `json:"incidents,omitempty"`
+	Info        Info        `json:"info"`
+	InfoSpanish *Info       `json:"infoSpanish,omitempty"`
 }
 
 type Reference struct {
@@ -138,4 +141,25 @@ type GeoJSONPolygon struct {
 type Geocodes struct {
 	UGC  []string `json:"UGC"`
 	SAME []string `json:"SAME"`
+}
+
+func ConvertReferences(refs string) []Reference {
+	var out []Reference
+	parts := strings.Fields(refs)
+	for _, ref := range parts {
+		tokens := strings.Split(ref, ",")
+		if len(tokens) != 3 {
+			continue
+		}
+		sent, err := time.Parse(time.RFC3339, tokens[2])
+		if err != nil {
+			continue
+		}
+		out = append(out, Reference{
+			Sender:     tokens[0],
+			Identifier: tokens[1],
+			Sent:       sent,
+		})
+	}
+	return out
 }

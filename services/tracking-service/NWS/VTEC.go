@@ -1,4 +1,4 @@
-package VTEC
+package NWS
 
 import (
 	"errors"
@@ -8,30 +8,32 @@ import (
 	"time"
 )
 
+const VTEC_REGEX_PATTERN string = `^/?([OTEX])\.(NEW|CON|EXT|EXA|EXB|UPG|CAN|EXP|COR|ROU)\.([A-Z0-9]{4})\.([A-Z]{2})\.([A-Z])\.(\d{4})\.(\d{6}T\d{4}Z)-(\d{6}T\d{4}Z)/?$`
+
 // Action code type enumeration
 type ActionCode int
 
 const (
-	NEW ActionCode = iota // New Event
-	CON                   // Continued Event
-	EXT                   // Extended Time
-	EXA                   // Extended Area
-	EXB                   // Extended Both
-	UPG                   // Upgrade Event
-	CAN                   // Cancel Event
-	EXP                   // Expired Event
-	COR                   // Corrected Event
-	ROU                   // Routine Event
+	VTEC_NEW ActionCode = iota // New Event
+	VTEC_CON                   // Continued Event
+	VTEC_EXT                   // Extended Time
+	VTEC_EXA                   // Extended Area
+	VTEC_EXB                   // Extended Both
+	VTEC_UPG                   // Upgrade Event
+	VTEC_CAN                   // Cancel Event
+	VTEC_EXP                   // Expired Event
+	VTEC_COR                   // Corrected Event
+	VTEC_ROU                   // Routine Event
 )
 
 // Product class type enumeration
 type ProductClass int
 
 const (
-	O ProductClass = iota // Operational
-	T                     // Test
-	E                     // Experimental
-	X                     // Experimental in Operation
+	VTEC_O ProductClass = iota // Operational
+	VTEC_T                     // Test
+	VTEC_E                     // Experimental
+	VTEC_X                     // Experimental in Operation
 )
 
 type VTEC struct {
@@ -41,14 +43,40 @@ type VTEC struct {
 	Phenomena           string       // Corresponds to "pp"
 	Significance        string       // Corresponds to "ss"
 	EventTrackingNumber int          // Corresponds to "nn"
-	StartDateTime       time.Time    // Corresponds to "yyyyMMddTHHmmssZ"
-	EndDateTime         time.Time    // Corresponds to "yyyyMMddTHHmmssZ"
+	StartDateTime       time.Time    // Corresponds to "yyMMddTHHmmZ"
+	EndDateTime         time.Time    // Corresponds to "yyMMddTHHmmZ"
+}
+
+func GetLongStateName(actionCode ActionCode) string {
+	switch actionCode {
+	case VTEC_NEW:
+		return "New"
+	case VTEC_CON:
+		return "Continued"
+	case VTEC_EXT:
+		return "Extended in Time"
+	case VTEC_EXA:
+		return "Extended in Area"
+	case VTEC_EXB:
+		return "Extended in Time + Area"
+	case VTEC_UPG:
+		return "Upgraded"
+	case VTEC_CAN:
+		return "Cancelled"
+	case VTEC_EXP:
+		return "Expired"
+	case VTEC_COR:
+		return "Corrected"
+	case VTEC_ROU:
+		return "Routine"
+	default:
+		return ""
+	}
 }
 
 func ParseVTEC(vtec string) (*VTEC, error) {
 	//Regex pattern to match the VTEC string
-	pattern := `^/?([OTEX])\.(NEW|CON|EXT|EXA|EXB|UPG|CAN|EXP|COR|ROU)\.([A-Z0-9]{4})\.([A-Z]{2})\.([A-Z])\.(\d{4})\.(\d{6}T\d{4}Z)-(\d{6}T\d{4}Z)/?$`
-	re := regexp.MustCompile(pattern)
+	re := regexp.MustCompile(VTEC_REGEX_PATTERN)
 	matches := re.FindStringSubmatch(vtec)
 	if len(matches) != 9 {
 		return nil, errors.New("invalid VTEC string format: " + vtec)
@@ -58,13 +86,13 @@ func ParseVTEC(vtec string) (*VTEC, error) {
 	var productClass ProductClass
 	switch strings.ToUpper(matches[1]) {
 	case "O":
-		productClass = O
+		productClass = VTEC_O
 	case "T":
-		productClass = T
+		productClass = VTEC_T
 	case "E":
-		productClass = E
+		productClass = VTEC_E
 	case "X":
-		productClass = X
+		productClass = VTEC_X
 	default:
 		return nil, errors.New("invalid product class")
 	}
@@ -73,25 +101,25 @@ func ParseVTEC(vtec string) (*VTEC, error) {
 	var actionCode ActionCode
 	switch strings.ToUpper(matches[2]) {
 	case "NEW":
-		actionCode = NEW
+		actionCode = VTEC_NEW
 	case "CON":
-		actionCode = CON
+		actionCode = VTEC_CON
 	case "EXT":
-		actionCode = EXT
+		actionCode = VTEC_EXT
 	case "EXA":
-		actionCode = EXA
+		actionCode = VTEC_EXA
 	case "EXB":
-		actionCode = EXB
+		actionCode = VTEC_EXB
 	case "UPG":
-		actionCode = UPG
+		actionCode = VTEC_UPG
 	case "CAN":
-		actionCode = CAN
+		actionCode = VTEC_CAN
 	case "EXP":
-		actionCode = EXP
+		actionCode = VTEC_EXP
 	case "COR":
-		actionCode = COR
+		actionCode = VTEC_COR
 	case "ROU":
-		actionCode = ROU
+		actionCode = VTEC_ROU
 	default:
 		return nil, errors.New("invalid action code")
 	}
