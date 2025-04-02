@@ -1,3 +1,8 @@
+/**========================================================================
+ *  						Tracking Service
+ *  							  SIREN
+ *========================================================================**/
+
 package main
 
 import (
@@ -6,10 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"regexp"
 	"slices"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -27,63 +29,21 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-type CapReferenceHelper struct {
-	Identifier        string
-	VTEC              NWS.VTEC
-	Areas             []string
-	References        []NWS.Reference
-	ExpiredReferences []NWS.Reference
-	Sent              time.Time
-}
+/**============================================
+ *               Prometheus Metrics
+ *=============================================**/
 
-type HistoryRectification struct {
-	History []SIREN.SirenAlertHistory
-	Areas   []string
-}
+var processingTime = prometheus.NewHistogram(
+	prometheus.HistogramOpts{
+		Name:    "alert_processing_time_seconds",
+		Help:    "Time taken to process an alert",
+		Buckets: prometheus.DefBuckets,
+	},
+)
 
-type AlertLock struct {
-	mu       sync.Mutex
-	lastUsed time.Time
-}
-
-func debugLog(msg string) {
-	if os.Getenv("ENV") != "PROD" {
-		log.Debug(msg)
-	}
-}
-
-var alertLocks sync.Map
-
-func getLock(key string) *AlertLock {
-	if lock, ok := alertLocks.Load(key); ok {
-		alertLock := lock.(*AlertLock)
-		alertLock.lastUsed = time.Now()
-		return alertLock
-	}
-
-	newLock := &AlertLock{
-		lastUsed: time.Now(),
-	}
-	actual, _ := alertLocks.LoadOrStore(key, newLock)
-	return actual.(*AlertLock)
-}
-
-func cleanupAlertLocker(expiration time.Duration) {
-	timer := time.NewTicker(expiration)
-	defer timer.Stop()
-
-	for range timer.C {
-		alertLocks.Range(func(key, value interface{}) bool {
-			alertLock := value.(*AlertLock)
-			if time.Since(alertLock.lastUsed) > expiration {
-				alertLocks.Delete(key)
-			}
-			return true
-		})
-		log.Info("Alert locker cleanup completed...")
-	}
-
-}
+/**============================================
+ *           Message Queue Connection
+ *=============================================**/
 
 var conn *ampq.Connection
 var ch *ampq.Channel
@@ -119,6 +79,10 @@ func connectToMQ() {
 
 }
 
+/**============================================
+ *               MongoDB Connection
+ *=============================================**/
+
 var client *mongo.Client
 var alertsCollection *mongo.Collection
 var stateCollection *mongo.Collection
@@ -127,7 +91,7 @@ func ConnectToMongo() {
 	//Connect to MongoDB
 	uri := os.Getenv("MONGO_URI")
 	if uri == "" {
-		log.Warn("Warning: MONGO_URI not set. Using default value, this may not work.\n")
+		log.Warn("MONGO_URI not set. Using default value, this may not work.\n")
 		uri = "mongodb://localhost:27017"
 	}
 
@@ -141,13 +105,57 @@ func ConnectToMongo() {
 	stateCollection = client.Database("siren").Collection("state")
 }
 
-var processingTime = prometheus.NewHistogram(
-	prometheus.HistogramOpts{
-		Name:    "alert_processing_time_seconds",
-		Help:    "Time taken to process an alert",
-		Buckets: prometheus.DefBuckets,
-	},
-)
+/**============================================
+ *            Concurrency Control
+ *=============================================**/
+
+type AlertLock struct {
+	mu       sync.Mutex
+	lastUsed time.Time
+}
+
+var alertLocker sync.Map
+
+func getLock(key string) *AlertLock {
+	if lock, ok := alertLocker.Load(key); ok {
+		alertLock := lock.(*AlertLock)
+		alertLock.lastUsed = time.Now()
+		return alertLock
+	}
+
+	newLock := &AlertLock{
+		lastUsed: time.Now(),
+	}
+	actual, _ := alertLocker.LoadOrStore(key, newLock)
+	return actual.(*AlertLock)
+}
+
+func cleanupAlertLocker(expiration time.Duration) {
+	timer := time.NewTicker(expiration)
+	defer timer.Stop()
+
+	for range timer.C {
+		alertLocker.Range(func(key, value interface{}) bool {
+			alertLock := value.(*AlertLock)
+			if time.Since(alertLock.lastUsed) > expiration {
+				alertLocker.Delete(key)
+			}
+			return true
+		})
+		log.Info("Alert locker cleanup completed...")
+	}
+
+}
+
+/**============================================
+ *               Driver Code
+ *=============================================**/
+
+func debugLog(msg string) {
+	if os.Getenv("ENV") != "PROD" {
+		log.Debug(msg)
+	}
+}
 
 func init() {
 	prometheus.MustRegister(processingTime)
@@ -159,6 +167,7 @@ func main() {
 		if err != nil {
 			log.Fatal("Error loading .env file")
 		}
+		log.SetLevel(log.DebugLevel)
 	}
 
 	log.Print("Starting tracking service...")
@@ -212,122 +221,12 @@ func main() {
 	<-forever
 }
 
-func getCanonicalIdentifier(vtec *NWS.VTEC) string {
-	//Func to get the canonical identifier from the vtec
-	canonicalIdentifier := fmt.Sprintf("%s%s-%s-%d", vtec.Phenomena, vtec.Significance, vtec.OfficeIdentifier, vtec.EventTrackingNumber)
-	return canonicalIdentifier
-}
+/**============================================
+ *           Alert Processing Logic
+ *=============================================**/
 
-func getShortenedId(alert NWS.Alert) string {
-	//Func to get the shortened identifier from the alert
-	wmoParts := strings.Split(alert.Info.Parameters.WMOidentifier, " ")
-	if len(wmoParts) < 3 {
-		log.Error("WMO identifier is not in the expected format, cannot generate shortened identifier")
-		return alert.Identifier
-	}
-
-	alertIdentifier := fmt.Sprintf("%s-%s-%s", alert.Info.EventCode.NWS, wmoParts[1], wmoParts[2])
-	return alertIdentifier
-}
-
-func extractVTEC(line string) string {
-	re := regexp.MustCompile(NWS.VTEC_REGEX_PATTERN)
-	matches := re.FindStringSubmatch(line)
-	if len(matches) > 0 {
-		return matches[0]
-	}
-	return ""
-}
-
-func determineUpgraded(alert NWS.Alert) string {
-	//We're gonna use the textual bulletin to see if we can find the new VTEC that corresponds to the alert.
-	//CAP only gives us the single VTEC value, so this is our hacky way around it.
-
-	//Fetch the most recent product from https://api.weather.gov/products/types/{AWIPS_ID_FRONT}/locations/{AWIPS_ID_BACK}
-	product := alert.Info.Parameters.AWIPSidentifier[:3]
-	office := alert.Info.Parameters.AWIPSidentifier[3:6]
-
-	var data NWS.ApiResponseData
-	err := SIREN.GetJSON(context.TODO(), fmt.Sprintf("https://api.weather.gov/products/types/%s/locations/%s", product, office), &data)
-	if err != nil {
-		debugLog(fmt.Sprintf("Failed to fetch data from the API: %s", err))
-		return ""
-	}
-
-	if len(data.Graph) == 0 {
-		// No textual bulletin available
-		debugLog("No textual bulletin available")
-		return ""
-	}
-
-	var newVtecString string = ""
-	for _, graph := range data.Graph {
-		//Get the most recent product
-		textProductURL := graph["@id"].(string)
-		var productData NWS.JSON
-		err = SIREN.GetJSON(context.TODO(), textProductURL, &productData)
-		if err != nil {
-			debugLog(fmt.Sprintf("Failed to fetch product data: %s", err))
-			return ""
-		}
-
-		productText := productData["productText"].(string)
-		vtecString := alert.Info.Parameters.VTEC
-
-		//Find the VTEC string in the product text
-		lines := strings.Split(productText, "\n")
-
-		for i, line := range lines {
-			if strings.Contains(line, vtecString) {
-				if i < len(lines)-1 {
-					if candidate := extractVTEC(lines[i+1]); candidate != "" && candidate != vtecString {
-						newVtecString = candidate
-						break
-					}
-				}
-
-				if i > 0 {
-					if candidate := extractVTEC(lines[i-1]); candidate != "" && candidate != vtecString {
-						newVtecString = candidate
-						break
-					}
-				}
-			}
-		}
-
-		if newVtecString != "" {
-			break
-		}
-
-	}
-	if newVtecString == "" {
-		debugLog("No new VTEC found")
-		return ""
-	}
-
-	//Parse the new VTEC string
-	newVtec, err := NWS.ParseVTEC(newVtecString)
-	if err != nil {
-		debugLog(fmt.Sprintf("Failed to parse new VTEC: %s", err))
-		return ""
-	}
-
-	if newVtec.Action == NWS.VTEC_NEW ||
-		newVtec.Action == NWS.VTEC_EXT ||
-		newVtec.Action == NWS.VTEC_EXA ||
-		newVtec.Action == NWS.VTEC_EXB {
-		// Canonical identifier for the new VTEC
-		newCanonicalIdentifier := getCanonicalIdentifier(newVtec)
-		return newCanonicalIdentifier
-	} else {
-		debugLog(fmt.Sprintf("No new VTEC found: %s", newVtecString))
-		return ""
-	}
-}
-
-// Recursively find all the references in a chain
-func findReference(ctx context.Context, reference NWS.Reference, sirenId string, visited map[string]bool) []CapReferenceHelper {
-
+// Recursively finds all the references from a given reference.
+func findReference(ctx context.Context, reference NWS.Reference, sirenId string, visited map[string]bool) []SIREN.MiniCAP {
 	if visited[reference.Identifier] {
 		// Already processed this alert
 		return nil
@@ -354,7 +253,7 @@ func findReference(ctx context.Context, reference NWS.Reference, sirenId string,
 		return nil
 	}
 
-	if getCanonicalIdentifier(referenceVTECParsed) != sirenId {
+	if SIREN.GetCanonicalIdentifier(referenceVTECParsed) != sirenId {
 		return nil
 	}
 
@@ -372,32 +271,33 @@ func findReference(ctx context.Context, reference NWS.Reference, sirenId string,
 		}
 	}
 
-	var newRefHelper CapReferenceHelper
-	newRefHelper.Identifier = reference.Identifier
-	newRefHelper.VTEC = *referenceVTECParsed
-	newRefHelper.Areas = referenceAreas
-	newRefHelper.References = referencedAlert.Properties.References
-	newRefHelper.ExpiredReferences = expiredReferences
-	newRefHelper.Sent = reference.Sent
+	var miniCAP SIREN.MiniCAP
+	miniCAP.Identifier = reference.Identifier
+	miniCAP.VTEC = *referenceVTECParsed
+	miniCAP.Areas = referenceAreas
+	miniCAP.References = referencedAlert.Properties.References
+	miniCAP.ExpiredReferences = expiredReferences
+	miniCAP.Sent = reference.Sent
 
-	var foundChildren []CapReferenceHelper
-	for _, childID := range newRefHelper.References {
+	var foundChildren []SIREN.MiniCAP
+	for _, childID := range miniCAP.References {
 		children := findReference(ctx, childID, sirenId, visited)
 		foundChildren = append(foundChildren, children...)
 	}
-	for _, childID := range newRefHelper.ExpiredReferences {
+	for _, childID := range miniCAP.ExpiredReferences {
 		children := findReference(ctx, childID, sirenId, visited)
 		foundChildren = append(foundChildren, children...)
 	}
 
-	results := []CapReferenceHelper{newRefHelper}
+	results := []SIREN.MiniCAP{miniCAP}
 	results = append(results, foundChildren...)
 	return results
 }
 
-func findAlertHistory(cap NWS.Alert, vtec *NWS.VTEC, currentHistory []string, workerId int) HistoryRectification {
-	sirenId := getCanonicalIdentifier(vtec)
-	log.Debug("Rectifying history for alert", sirenId, "sirenId", sirenId, "worker", workerId)
+// Recitifies the history and areas for a given alert using CAP references
+func findAlertHistory(cap NWS.Alert, vtec *NWS.VTEC, currentHistory []string, workerId int) SIREN.Rectification {
+	sirenId := SIREN.GetCanonicalIdentifier(vtec)
+	log.Debug("Rectifying history for alert", "sirenId", sirenId, "worker", workerId)
 
 	var references []NWS.Reference
 	if len(cap.References) > 0 {
@@ -412,20 +312,16 @@ func findAlertHistory(cap NWS.Alert, vtec *NWS.VTEC, currentHistory []string, wo
 		visited[hist] = true
 	}
 
-	var allRefHelpers []CapReferenceHelper
+	var miniCAPs []SIREN.MiniCAP
 	for _, ref := range references {
 		// For each reference, fetch its chain of references (if any)
 		refFetch := findReference(context.TODO(), ref, sirenId, visited)
-		allRefHelpers = append(allRefHelpers, refFetch...)
+		miniCAPs = append(miniCAPs, refFetch...)
 	}
 
-	sort.Slice(allRefHelpers, func(i, j int) bool {
-		return allRefHelpers[i].Sent.Before(allRefHelpers[j].Sent)
-	})
-
 	var areas []string
-	for _, ref := range allRefHelpers {
-		for _, area := range ref.Areas {
+	for _, miniCAP := range miniCAPs {
+		for _, area := range miniCAP.Areas {
 			// Check if the areas are already in the list
 			if !slices.Contains(areas, area) {
 				areas = append(areas, area)
@@ -434,37 +330,53 @@ func findAlertHistory(cap NWS.Alert, vtec *NWS.VTEC, currentHistory []string, wo
 	}
 
 	var history []SIREN.SirenAlertHistory
-	sort.Slice(allRefHelpers, func(i, j int) bool {
-		return allRefHelpers[i].Sent.After(allRefHelpers[j].Sent)
+
+	//Sort the miniCAPs by the sent time so the most recent is first
+	slices.SortFunc(miniCAPs, func(a, b SIREN.MiniCAP) int {
+		return b.Sent.Compare(a.Sent)
 	})
 
-	for _, ref := range allRefHelpers {
+	for _, miniCAP := range miniCAPs {
 		history = append(history, SIREN.SirenAlertHistory{
-			RecievedAt:            ref.Sent,
-			VtecActionDescription: NWS.GetLongStateName(ref.VTEC.Action),
-			VtecAction:            ref.VTEC.Action,
-			AppliesTo:             ref.Areas,
-			CapID:                 ref.Identifier,
+			RecievedAt:            miniCAP.Sent,
+			VtecActionDescription: NWS.GetLongStateName(miniCAP.VTEC.Action),
+			VtecAction:            miniCAP.VTEC.Action,
+			AppliesTo:             miniCAP.Areas,
+			CapID:                 miniCAP.Identifier,
 		})
 	}
 
-	return HistoryRectification{
+	return SIREN.Rectification{
 		History: history,
 		Areas:   areas,
 	}
 }
 
+// Processes the alert and updates the database, this is the main meat of the alert processing logic.
+// It is run in a goroutine, and uses a mutex to ensure that only one goroutine can process a given event at a time.
 func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
-	sirenID := getCanonicalIdentifier(vtec)
-	alertLock := getLock(sirenID) // Aquire the mutex for the alert
-	if !alertLock.mu.TryLock() {
-		log.Info("Worker is blocked waiting for lock on alert", "id", sirenID, "worker", workerId)
-		alertLock.mu.Lock()
-		log.Info("Worker has now acquired lock on alert", "id", sirenID, "worker", workerId)
-	} // Have the worker wait for the lock to be released
+	// Generate a unique identifier for the alert based on its VTEC
+	sirenID := SIREN.GetCanonicalIdentifier(vtec)
 
+	// Retrieve or create a mutex lock for the alert using its unique identifier
+	alertLock := getLock(sirenID)
+	log.Debug("Attempting to aquire mutex lock", "id", sirenID, "worker", workerId)
+	// Block until the lock becomes available and then acquire it
+	alertLock.mu.Lock()
+	log.Debug("Worker has now acquired lock on alert", "id", sirenID, "worker", workerId)
+
+	// Store the starting time of the alert processing execution
+	start := time.Now()
+	defer func() {
+		// Record the processing time so the dashboard can track the time
+		elapsed := time.Since(start)
+		processingTime.Observe(elapsed.Seconds())
+	}()
+
+	// Ensure the lock is released when the function exits
 	defer alertLock.mu.Unlock()
 
+	// For new alerts, we can skip most of the processing
 	if vtec.Action == NWS.VTEC_NEW {
 		_, err := stateCollection.InsertOne(context.TODO(), SIREN.SirenAlert{
 			Identifier:         sirenID,
@@ -493,6 +405,7 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 		return
 	}
 
+	// Check if the alert is already in the database
 	var existingAlert SIREN.SirenAlert
 	err := stateCollection.FindOne(context.TODO(), bson.M{"identifier": sirenID}).Decode(&existingAlert)
 	if err != nil {
@@ -517,6 +430,7 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 		}
 	}
 
+	// Create the history entry for this CAP
 	history := SIREN.SirenAlertHistory{
 		RecievedAt:            time.Now(),
 		VtecActionDescription: NWS.GetLongStateName(vtec.Action),
@@ -524,43 +438,52 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 		AppliesTo:             alert.Info.Area.Geocodes.UGC,
 		CapID:                 alert.Identifier,
 	}
+	// Add the history entry to the existing alert
 	existingAlert.History = append([]SIREN.SirenAlertHistory{history}, existingAlert.History...)
 
+	// Get all the CAP IDs from the history
+	// This is used for the rectification process to avoid duplicate history entries
 	idsInHistory := make([]string, len(existingAlert.History))
 	for i, hist := range existingAlert.History {
 		idsInHistory[i] = hist.CapID
 	}
-	rectifiedHistory := findAlertHistory(alert, vtec, idsInHistory, workerId)
 
+	// Attempt to rectify any history we are missing. If were not missing anything
+	// this won't do anything, it'll run a single O(n log n) operation.
+	rectifiedHistory := findAlertHistory(alert, vtec, idsInHistory, workerId)
+	// Add the rectified history to the existing alert
 	existingAlert.History = append(existingAlert.History, rectifiedHistory.History...)
 
-	//Sort the history by the recieved time
-	sort.Slice(existingAlert.History, func(i, j int) bool {
-		return existingAlert.History[i].RecievedAt.After(existingAlert.History[j].RecievedAt)
+	//Sort the history by the recieved time so the most recent history is first
+	slices.SortFunc(existingAlert.History, func(a, b SIREN.SirenAlertHistory) int {
+		return b.RecievedAt.Compare(a.RecievedAt)
 	})
 
 	//Update the alert in the database
 	existingAlert.LastUpdatedTime = time.Now()
+
 	//Determine if every area in the alert has a final vtec action applied
 	areaMap := make(map[string]bool)
 	for _, historyObject := range existingAlert.History {
+		// Used to determine if the alert is active or inactive
 		if historyObject.VtecAction == NWS.VTEC_UPG ||
 			historyObject.VtecAction == NWS.VTEC_CAN ||
 			historyObject.VtecAction == NWS.VTEC_EXP {
 			for _, area := range historyObject.AppliesTo {
+				// This area has a final vtec action applied to it
 				areaMap[area] = true
 			}
 		}
 
+		//Recitify the areas in the alert too
 		for _, area := range historyObject.AppliesTo {
-			//Check if the area is in the alert
 			if !slices.Contains(existingAlert.Areas, area) {
-				//If the area is not in the alert, add it
 				existingAlert.Areas = append(existingAlert.Areas, area)
 			}
 		}
 	}
 
+	// These next couple of lines are used to determine if the alert is active or inactive
 	isInactive := false
 	for _, area := range alert.Info.Area.Geocodes.UGC {
 		if _, ok := areaMap[area]; !ok {
@@ -577,9 +500,11 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 		existingAlert.State = "Inactive"
 	}
 
-	existingAlert.MostRecentSentTime = time.Now()
+	//Update the most recent sent time and CAP ID
+	existingAlert.MostRecentSentTime = alert.Sent
 	existingAlert.MostRecentCAP = alert.Identifier
 
+	//Upsert the alert in the database
 	_, err = stateCollection.UpdateOne(
 		context.TODO(),
 		bson.M{"identifier": sirenID},
@@ -593,37 +518,11 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 	log.Debug("Alert was upserted to the database", "state", existingAlert.State, "id", sirenID, "worker", workerId)
 }
 
-func handleAlertMessage(msg string, workerId int) {
-	start := time.Now()
-
-	defer func() {
-		elapsed := time.Since(start)
-		processingTime.Observe(elapsed.Seconds())
-	}()
-
-	var alert NWS.Alert
-	//Unmarshal the message
-	err := json.Unmarshal([]byte(msg), &alert)
-	if err != nil {
-		log.Error("Failed to unmarshal the alert", "worker", workerId, "err", err)
-		return
-	}
-
-	shortId := getShortenedId(alert)
-
-	log.Debug("Received message", "id", shortId, "worker", workerId)
-
-	vtec, err := NWS.ParseVTEC(alert.Info.Parameters.VTEC)
-	if err != nil {
-		log.Info("Failed to parse VTEC, skipping alert processing", "id", shortId, "worker", workerId, "err", err)
-	}
-
-	if vtec != nil {
-		handleAlert(alert, vtec, workerId)
-	}
+// Stores the CAP alert in the database
+func storeCap(alert NWS.Alert, shortId string, workerId int) {
 
 	var existingAlert NWS.Alert
-	err = alertsCollection.FindOne(context.TODO(), bson.M{"identifier": alert.Identifier}).Decode(&existingAlert)
+	err := alertsCollection.FindOne(context.TODO(), bson.M{"identifier": alert.Identifier}).Decode(&existingAlert)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			//Insert the alert into the database
@@ -631,22 +530,6 @@ func handleAlertMessage(msg string, workerId int) {
 			//Handle the error
 			if err != nil {
 				log.Error("Failed to insert the alert into the database", "id", shortId, "worker", workerId, "err", err)
-				return
-			}
-
-			//Publish the alert to the live queue
-			alertJson, err := json.Marshal(alert)
-			if err != nil {
-				log.Error("Failed to marshal the alert to JSON", "id", shortId, "worker", workerId, "err", err)
-				return
-			}
-			err = ch.Publish("", liveQueue.Name, false, false, ampq.Publishing{
-				ContentType: "application/json",
-				Body:        alertJson,
-			})
-
-			if err != nil {
-				log.Error("Failed to publish the alert to the live queue", "id", shortId, "worker", workerId, "err", err)
 				return
 			}
 
@@ -658,6 +541,50 @@ func handleAlertMessage(msg string, workerId int) {
 		log.Warn("Alert already exists in the database", "id", shortId, "worker", workerId)
 		return
 	}
+}
 
-	log.Info("Alert processed successfully, worker is free", "id", shortId, "worker", workerId)
+// Handles parsing the alert JSON and processing it.
+// This is the main entry point for the alert processing logic.
+func handleAlertMessage(msg string, workerId int) {
+	var alert NWS.Alert
+	// Unmarshal the message
+	err := json.Unmarshal([]byte(msg), &alert)
+	if err != nil {
+		log.Error("Failed to unmarshal the alert", "worker", workerId, "err", err)
+		return
+	}
+
+	shortId := SIREN.GetShortenedId(alert)
+	log.Debug("Received message", "id", shortId, "worker", workerId)
+
+	vtec, err := NWS.ParseVTEC(alert.Info.Parameters.VTEC)
+	if err != nil {
+		log.Debug("Failed to parse VTEC, skipping alert processing", "id", shortId, "worker", workerId, "err", err)
+	}
+
+	if vtec != nil {
+		// It's sort of hidden, but this is where the alert is actually processed
+		handleAlert(alert, vtec, workerId)
+	}
+
+	// Save the CAP alert to the database
+	storeCap(alert, shortId, workerId)
+
+	// Publish the alert to the live queue
+	alertJson, err := json.Marshal(alert)
+	if err != nil {
+		log.Error("Failed to marshal the alert to JSON", "id", shortId, "worker", workerId, "err", err)
+		return
+	}
+	err = ch.Publish("", liveQueue.Name, false, false, ampq.Publishing{
+		ContentType: "application/json",
+		Body:        alertJson,
+	})
+
+	if err != nil {
+		log.Error("Failed to publish the alert to the live queue", "id", shortId, "worker", workerId, "err", err)
+		return
+	}
+
+	log.Debug("Alert processed successfully, worker is free", "id", shortId, "worker", workerId)
 }

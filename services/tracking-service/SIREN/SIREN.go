@@ -24,20 +24,16 @@ type SirenAlert struct {
 	Areas              []string            `bson:"areas"`
 }
 
-type AlertEntity struct {
-	ID              string    `bson:"identifier"` // From the alert VTEC, it's Office+Phenomena+Significance+EventTrackingNumber+Year
-	CapID           string    `bson:"capID"`
-	LastUpdated     time.Time `bson:"lastUpdated"`
-	AreasReferenced []string  `bson:"areasReferenced"`
-	Active          bool      `bson:"active"`
-	History         any       `bson:"history,omitempty"`
+type MiniCAP struct {
+	Identifier        string
+	VTEC              NWS.VTEC
+	Areas             []string
+	References        []NWS.Reference
+	ExpiredReferences []NWS.Reference
+	Sent              time.Time
 }
 
-type AlertHistory struct {
-	ID           string         `bson:"identifier"`
-	Action       NWS.ActionCode `bson:"action"`
-	IssuanceTime time.Time      `bson:"issuanceTime"`
-	ExpireTime   time.Time      `bson:"expireTime"`
-	Areas        []string       `bson:"areas"`
-	ChildIDs     []string       `bson:"childIDs,omitempty"`
+type Rectification struct {
+	History []SirenAlertHistory
+	Areas   []string
 }

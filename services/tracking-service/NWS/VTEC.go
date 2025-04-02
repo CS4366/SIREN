@@ -79,7 +79,7 @@ func ParseVTEC(vtec string) (*VTEC, error) {
 	re := regexp.MustCompile(VTEC_REGEX_PATTERN)
 	matches := re.FindStringSubmatch(vtec)
 	if len(matches) != 9 {
-		return nil, errors.New("invalid VTEC string format: " + vtec)
+		return nil, errors.New("invalid VTEC string format")
 	}
 
 	//Product code parsing
