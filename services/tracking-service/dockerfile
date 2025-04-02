@@ -19,5 +19,7 @@ COPY --from=builder /app/docker-tracking-service /docker-tracking-service
 LABEL org.opencontainers.image.source="https://github.com/CS4366/SIREN"
 LABEL org.opencontainers.image.title="SIREN Tracking Service"
 
+EXPOSE 6091
+
 # Specify the binary as the entrypoint
 CMD ["/docker-tracking-service"]
