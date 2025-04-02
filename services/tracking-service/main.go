@@ -33,13 +33,22 @@ import (
  *               Prometheus Metrics
  *=============================================**/
 
-var processingTime = prometheus.NewHistogram(
-	prometheus.HistogramOpts{
-		Name:    "alert_processing_time_seconds",
-		Help:    "Time taken to process an alert",
-		Buckets: prometheus.DefBuckets,
+var processingTime = prometheus.NewSummary(
+	prometheus.SummaryOpts{
+		Name: "alert_processing_time_seconds",
+		Help: "Time taken to process an alert",
 	},
 )
+
+var alertsReceived = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "alerts_received_total",
+	Help: "Total number of alert messages received",
+})
+
+var alertsProcessed = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "alerts_processed_total",
+	Help: "Total number of alerts processed successfully",
+})
 
 /**============================================
  *           Message Queue Connection
@@ -159,6 +168,8 @@ func debugLog(msg string) {
 
 func init() {
 	prometheus.MustRegister(processingTime)
+	prometheus.MustRegister(alertsReceived)
+	prometheus.MustRegister(alertsProcessed)
 }
 
 func main() {
@@ -546,6 +557,7 @@ func storeCap(alert NWS.Alert, shortId string, workerId int) {
 // Handles parsing the alert JSON and processing it.
 // This is the main entry point for the alert processing logic.
 func handleAlertMessage(msg string, workerId int) {
+	alertsReceived.Inc()
 	var alert NWS.Alert
 	// Unmarshal the message
 	err := json.Unmarshal([]byte(msg), &alert)
@@ -587,4 +599,5 @@ func handleAlertMessage(msg string, workerId int) {
 	}
 
 	log.Debug("Alert processed successfully, worker is free", "id", shortId, "worker", workerId)
+	alertsProcessed.Inc()
 }
