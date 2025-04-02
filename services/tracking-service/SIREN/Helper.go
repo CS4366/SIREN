@@ -3,6 +3,7 @@ package SIREN
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -55,7 +56,7 @@ func GetJSON(ctx context.Context, url string, output any) error {
 
 	if resp.StatusCode != http.StatusOK {
 		log.Error("Failed to fetch data: status code", "status", resp.StatusCode)
-		return err
+		return errors.New("failed to fetch data")
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(output); err != nil {
