@@ -1,11 +1,11 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { map } from 'framer-motion/client';
+
 
 const MapPage = () => {
   // Refs for MapboxGL
-  const mapRef = useRef();
+  const mapRef = useRef<mapboxgl.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
 
   //TODO:
@@ -53,7 +53,7 @@ const MapPage = () => {
     
     // Add map to the mapContainerRef
     mapRef.current = new mapboxgl.Map({
-      container: mapContainerRef.current,
+      container: mapContainerRef.current as HTMLElement,
       style: 'mapbox://styles/mapbox/navigation-night-v1',
       center: [-101.87457, 33.58462],
       zoom: 5,
@@ -78,6 +78,7 @@ const MapPage = () => {
           type: 'geojson',
           data: {
             type: 'Feature',
+            properties: {}, // Add an empty properties object
             geometry: {
               type: 'Polygon',
               coordinates: coordinates,
@@ -113,7 +114,9 @@ const MapPage = () => {
 
     // Clean up on unmount
     return () => {
-      mapRef.current.remove()
+      if (mapRef.current) {
+        mapRef.current.remove();
+      }
     }
   }, [])
 
