@@ -194,7 +194,7 @@ jobs:
           fi
           echo "Services changed: $CHANGED"
           # Convert list (newline separated) into a JSON array using jq
-          JSON_ARRAY=$(printf '%s\n' $CHANGED | jq -R . | jq -s .)
+          JSON_ARRAY=$(printf '%s\n' $CHANGED | jq -R . | jq -cs .)
           echo "changed_services=$JSON_ARRAY" >> $GITHUB_OUTPUT
 
       - name: Trigger Deployment on Server
