@@ -154,7 +154,7 @@ const DataPage = () => {
             <div className="flex flex-row h-auto w-full justify-between gap-3">
                 <div className="flex flex-col w-[27%] mt-1 gap-3">
                   <p className="font-bold text-md">Location</p>
-                  <input type="text" placeholder="Enter Location" className="w-full h-auto border border-[#71717a] rounded-2xl bg-transparent p-4" />
+                  <input type="text" placeholder="Enter Location" className="w-full h-auto focus:outline-none border border-[#71717a] rounded-2xl bg-transparent p-4" />
                 </div>
                 <div className="flex flex-col w-[27%] mt-1 gap-3">
                   <p className="font-bold text-md">Date Range</p>

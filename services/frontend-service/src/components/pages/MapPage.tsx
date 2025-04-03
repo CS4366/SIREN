@@ -131,7 +131,7 @@ const MapPage = () => {
             <h1 className="text-lg sm:text-lg md:text-lg lg:text-xl xl:text-4xl font-bold italic leading-none">Siren</h1>
             <p className="text-sm sm:text-sm md:text-sm lg:text-md xl:text-lg font-light leading-none">Alert Map</p>
           </div>
-          <input type="text" placeholder="Search SIREN Map" className="w-2/3 bg-white rounded-lg p-2 text-black h-2/3 text-lg text-sm sm:text-sm md:text-sm lg:text-md xl:text-lg font-light" />
+          <input type="text" placeholder="Search SIREN Map" className="w-2/3 bg-white focus:outline-none rounded-lg p-2 text-black h-2/3 text-lg text-sm sm:text-sm md:text-sm lg:text-md xl:text-lg font-light" />
         </div>
       </div>
     </>

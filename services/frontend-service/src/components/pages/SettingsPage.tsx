@@ -168,14 +168,14 @@ const SettingsPage = () => {
                 <div className='flex flex-col w-1/2 gap-3'>
                   <p className="text-sm">Alert Border Opacity</p>
                   <Slider
-                    defaultValue={[100]}
-                    color="foreground"
-                    maxValue={100}
-                    minValue={0}
-                    step={10}
-                    showSteps={true}
-                    className="w-full"
-                    size="lg"
+                      defaultValue={[100]}
+                      color="foreground"
+                      maxValue={100}
+                      minValue={0}
+                      step={10}
+                      showSteps={true}
+                      className="w-full"
+                      size="lg"
                     />
                 </div>
                 <div className='flex flex-col w-1/2 gap-3'>
@@ -189,7 +189,7 @@ const SettingsPage = () => {
                     size="lg"
                     showSteps={true}
                     className="w-full"
-                    />
+                  />
                 </div>
               </div>
               
@@ -198,7 +198,7 @@ const SettingsPage = () => {
                 <h1 className="font-bold text-md">Filtered Alerts</h1>
                 <Dropdown>
                   <DropdownTrigger>
-                    <Button variant="bordered" className="text-sm border border-[#71717a]">Select Alerts</Button>
+                    <Button variant="bordered" className="text-sm border border-[#71717a] text-white">Select Alerts</Button>
                   </DropdownTrigger>
                   <DropdownMenu>
                     <DropdownSection title="Alert Types">

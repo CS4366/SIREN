@@ -72,7 +72,7 @@ const Alert = ({ alertType, alertIssue, alertStartTime, alertEndTime, alertDescr
                     </DrawerContent>
                 </Drawer>
                 {/* Button To Show Alert on Map (Maybe zoom in on area to implement)*/}
-                <Button className="h-2/3 w-full border border-white bg-transparent text-xs sm:text-xs md:text-xs lg:text-xs xl:text-xs p-2">Show on Map</Button>
+                <Button className="h-2/3 w-full text-white  border border-white bg-transparent text-xs sm:text-xs md:text-xs lg:text-xs xl:text-xs p-2">Show on Map</Button>
             </div>
         </div>
     );
