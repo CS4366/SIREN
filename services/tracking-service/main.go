@@ -51,12 +51,12 @@ var alertsProcessed = prometheus.NewCounter(prometheus.CounterOpts{
 	Help: "Total number of alerts processed successfully",
 })
 
-var alertsByUGC = prometheus.NewGaugeVec(
-	prometheus.GaugeOpts{
-		Name: "alerts_by_ugc",
-		Help: "Current number of active alerts per UGC code",
+var alertsByUGC = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "alerts_by_ugc_total",
+		Help: "Total number of alerts per UGC code",
 	},
-	[]string{"ugc", "lat", "lon"},
+	[]string{"ugc_code", "lat", "lon"},
 )
 
 /**============================================
@@ -431,7 +431,7 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 		for _, ugc := range alert.Info.Area.Geocodes.UGC {
 			// Check if the UGC code is in the map
 			if code, ok := ugcMap[ugc]; ok {
-				alertsByUGC.WithLabelValues(code.Code, fmt.Sprintf("%f", code.Lat), fmt.Sprintf("%f", code.Lon)).Inc()
+				alertsByUGC.WithLabelValues(code.Code, fmt.Sprintf("%.4f", code.Lat), fmt.Sprintf("%.4f", code.Lon)).Inc()
 			}
 		}
 
