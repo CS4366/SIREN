@@ -157,9 +157,9 @@ const SettingsPage = () => {
               {/* Map Input */}
               <h1 className="font-bold text-md mt-2">Map Settings</h1>
               <p className="text-sm">Map Basemap</p>
-              <Select label="Select a Map" variant="#bordered" className="w-full h-auto border border-[#71717a] rounded-2xl">
+              <Select label="Select a Map" variant="bordered" className="w-full h-auto border border-[#71717a] rounded-2xl">
                 {maps.map((map) => (
-                  <SelectItem key={map.id} value={map.name}>
+                  <SelectItem key={map.id}>
                     {map.name}
                   </SelectItem>
                 ))}
@@ -170,8 +170,8 @@ const SettingsPage = () => {
                   <Slider
                     defaultValue={[100]}
                     color="foreground"
-                    max={100}
-                    min={0}
+                    maxValue={100}
+                    minValue={0}
                     step={10}
                     showSteps={true}
                     className="w-full"
@@ -183,8 +183,8 @@ const SettingsPage = () => {
                   <Slider
                     defaultValue={[40]}
                     color="foreground"
-                    max={100}
-                    min={0}
+                    maxValue={100}
+                    minValue={0}
                     step={10}
                     size="lg"
                     showSteps={true}
