@@ -11,10 +11,6 @@ import HomeIconDark from "./assets/HomeIconDark.png";
 import SettingsIconDark from "./assets/SettingsIconDark.png";
 import DataIconDark from "./assets/DataIconDark.png";
 import MapIconDark from "./assets/MapIconDark.png";
-import HomeIcon from "./assets/home-icon.png";
-import DataIcon from "./assets/data-icon.png";
-import MapIcon from "./assets/map-icon.png";
-import SettingsIcon from "./assets/settings-icon.png";
 
 
 function App() {
