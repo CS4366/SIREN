@@ -25,14 +25,15 @@ const HomePage = () => {
   const [isPushConnected, setIsPushConnected] = useState(socket.connected);
   const [isAPIConnected, setIsAPIConnected] = useState(false);
   // State variables for alert data this will be fetched from API later on
-  const [activeAlerts, setActiveAlerts] = useState(8);
-  const [activeIncrease, setActiveIncrease] = useState(1);
-  const [totalAlerts, setTotalAlerts] = useState(148);
-  const [totalAlertsIncrease, setTotalAlertsIncrease] = useState(1);
-  const [commonAlertType, setCommonAlertType] = useState("Servere Thunderstorm Warning");
-  const [commonAlertTypeYesterday, setCommonAlertTypeYesterday] = useState("Special Weather Statement");
-  const [mostAlertAreas, setMostAlertAreas] = useState(["West Texas", "East Texas", "Great Plains"]);
-  const [yesterdayMostAlertAreas, setYesterdayMostAlertAreas] = useState(["West Texas", "East Texas"]);
+  // Sets will need to be added back in later they were taken out so there wouldnt be any hosting errors
+  const [activeAlerts] = useState(8);
+  const [activeIncrease] = useState(1);
+  const [totalAlerts] = useState(148);
+  const [totalAlertsIncrease] = useState(1);
+  const [commonAlertType] = useState("Servere Thunderstorm Warning");
+  const [commonAlertTypeYesterday] = useState("Special Weather Statement");
+  const [mostAlertAreas] = useState(["West Texas", "East Texas", "Great Plains"]);
+  const [yesterdayMostAlertAreas] = useState(["West Texas", "East Texas"]);
 
   // Refs for MapboxGL
   const mapRef = useRef<mapboxgl.Map | null>(null);
