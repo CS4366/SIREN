@@ -201,6 +201,4 @@ jobs:
         if: steps.combine.outputs.changed_services != '[]'
         run: |
           echo "Triggering deployment for services: ${{ steps.combine.outputs.changed_services }}"
-          curl -X POST https://siren-deploy.jaxcksn.dev/deploy \
-          -H "Content-Type: application/json" \
-          -d "{\"secret\": \"${{ secrets.DEPLOY_SECRET }}\", \"services\": ${{ steps.combine.outputs.changed_services }}, \"all\": false}"
+          curl -L 'https://siren-deploy.jaxcksn.dev/deploy' -H 'Content-Type: application/json' -d '{"secret":"${{ secrets.DEPLOY_SECRET }}","services":${{ steps.combine.outputs.changed_services }},"all":false}'
