@@ -166,7 +166,7 @@ jobs:
 
       - name: Upload Changed Service Artifact
         if: steps.changes.outputs.src == 'true'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: changed-${{ matrix.app.service }}
           path: changed.txt
