@@ -17,6 +17,7 @@ services:
       - 27017:27017
     restart: always
     volumes:
+      - ./scripts/mongo-init:/docker-entrypoint-initdb.d:ro
       - mongodb_data:/data/db
 
 volumes:

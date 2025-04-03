@@ -51,6 +51,14 @@ var alertsProcessed = prometheus.NewCounter(prometheus.CounterOpts{
 	Help: "Total number of alerts processed successfully",
 })
 
+var alertsByUGC = prometheus.NewGaugeVec(
+	prometheus.GaugeOpts{
+		Name: "alerts_by_ugc",
+		Help: "Current number of active alerts per UGC code",
+	},
+	[]string{"ugc", "lat", "lon"},
+)
+
 /**============================================
  *           Message Queue Connection
  *=============================================**/
@@ -93,9 +101,18 @@ func connectToMQ() {
  *               MongoDB Connection
  *=============================================**/
 
+type UGC struct {
+	Code string  `bson:"UGC"`
+	Lat  float64 `bson:"Lat"`
+	Lon  float64 `bson:"Lon"`
+	Name string  `bson:"Name"`
+}
+
 var client *mongo.Client
 var alertsCollection *mongo.Collection
 var stateCollection *mongo.Collection
+var ugcCollection *mongo.Collection
+var ugcMap map[string]UGC
 
 func ConnectToMongo() {
 	//Connect to MongoDB
@@ -113,6 +130,27 @@ func ConnectToMongo() {
 
 	alertsCollection = client.Database("siren").Collection("alerts")
 	stateCollection = client.Database("siren").Collection("state")
+	ugcCollection = client.Database("siren").Collection("ugc_codes")
+
+	// Create the UGC map
+	ugcMap = make(map[string]UGC)
+	cursor, err := ugcCollection.Find(context.TODO(), bson.M{})
+	if err != nil {
+		log.Fatal("Failed to find UGC collection")
+	}
+	defer cursor.Close(context.TODO())
+	for cursor.Next(context.TODO()) {
+		var result UGC
+		err := cursor.Decode(&result)
+		if err != nil {
+			log.Fatal("Failed to decode UGC document")
+		}
+		ugcMap[result.Code] = result
+	}
+	if err := cursor.Err(); err != nil {
+		log.Fatal("Failed to iterate over UGC collection")
+	}
+
 }
 
 /**============================================
@@ -171,6 +209,7 @@ func init() {
 	prometheus.MustRegister(processingTime)
 	prometheus.MustRegister(alertsReceived)
 	prometheus.MustRegister(alertsProcessed)
+	prometheus.MustRegister(alertsByUGC)
 }
 
 func main() {
@@ -389,6 +428,13 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 
 	// For new alerts, we can skip most of the processing
 	if vtec.Action == NWS.VTEC_NEW {
+		for _, ugc := range alert.Info.Area.Geocodes.UGC {
+			// Check if the UGC code is in the map
+			if code, ok := ugcMap[ugc]; ok {
+				alertsByUGC.WithLabelValues(code.Code, fmt.Sprintf("%f", code.Lat), fmt.Sprintf("%f", code.Lon)).Inc()
+			}
+		}
+
 		_, err := stateCollection.InsertOne(context.TODO(), SIREN.SirenAlert{
 			Identifier:         sirenID,
 			State:              "Active",
@@ -527,6 +573,7 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 		return
 	}
 	log.Debug("Alert was upserted to the database", "state", existingAlert.State, "id", sirenID, "worker", workerId)
+
 }
 
 // Stores the CAP alert in the database
