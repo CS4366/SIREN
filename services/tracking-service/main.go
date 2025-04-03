@@ -51,14 +51,6 @@ var alertsProcessed = prometheus.NewCounter(prometheus.CounterOpts{
 	Help: "Total number of alerts processed successfully",
 })
 
-var alertsByUGC = prometheus.NewCounterVec(
-	prometheus.CounterOpts{
-		Name: "alerts_by_ugc_total",
-		Help: "Total number of alerts per UGC code",
-	},
-	[]string{"ugc_code", "lat", "lon"},
-)
-
 /**============================================
  *           Message Queue Connection
  *=============================================**/
@@ -101,18 +93,9 @@ func connectToMQ() {
  *               MongoDB Connection
  *=============================================**/
 
-type UGC struct {
-	Code string  `bson:"UGC"`
-	Lat  float64 `bson:"Lat"`
-	Lon  float64 `bson:"Lon"`
-	Name string  `bson:"Name"`
-}
-
 var client *mongo.Client
 var alertsCollection *mongo.Collection
 var stateCollection *mongo.Collection
-var ugcCollection *mongo.Collection
-var ugcMap map[string]UGC
 
 func ConnectToMongo() {
 	//Connect to MongoDB
@@ -130,27 +113,6 @@ func ConnectToMongo() {
 
 	alertsCollection = client.Database("siren").Collection("alerts")
 	stateCollection = client.Database("siren").Collection("state")
-	ugcCollection = client.Database("siren").Collection("ugc_codes")
-
-	// Create the UGC map
-	ugcMap = make(map[string]UGC)
-	cursor, err := ugcCollection.Find(context.TODO(), bson.M{})
-	if err != nil {
-		log.Fatal("Failed to find UGC collection")
-	}
-	defer cursor.Close(context.TODO())
-	for cursor.Next(context.TODO()) {
-		var result UGC
-		err := cursor.Decode(&result)
-		if err != nil {
-			log.Fatal("Failed to decode UGC document")
-		}
-		ugcMap[result.Code] = result
-	}
-	if err := cursor.Err(); err != nil {
-		log.Fatal("Failed to iterate over UGC collection")
-	}
-
 }
 
 /**============================================
@@ -209,7 +171,6 @@ func init() {
 	prometheus.MustRegister(processingTime)
 	prometheus.MustRegister(alertsReceived)
 	prometheus.MustRegister(alertsProcessed)
-	prometheus.MustRegister(alertsByUGC)
 }
 
 func main() {
@@ -235,6 +196,8 @@ func main() {
 		}
 	}()
 
+	//TODO: Redis would go here.
+
 	//Consume messages from the tracking queue
 	msgs, err := ch.Consume(trackingQueue.Name, "", true, false, false, false, nil)
 	if err != nil {
@@ -255,6 +218,7 @@ func main() {
 		}(i)
 	}
 
+	// This server is used to expose the metrics to Prometheus
 	http.Handle("/metrics", promhttp.Handler())
 	go func() {
 		port, ok := os.LookupEnv("METRICS_PORT")
@@ -403,90 +367,7 @@ func findAlertHistory(cap NWS.Alert, vtec *NWS.VTEC, currentHistory []string, wo
 	}
 }
 
-// Processes the alert and updates the database, this is the main meat of the alert processing logic.
-// It is run in a goroutine, and uses a mutex to ensure that only one goroutine can process a given event at a time.
-func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
-	// Generate a unique identifier for the alert based on its VTEC
-	sirenID := SIREN.GetCanonicalIdentifier(vtec)
-
-	// Retrieve or create a mutex lock for the alert using its unique identifier
-	alertLock := getLock(sirenID)
-	log.Debug("Attempting to aquire mutex lock", "id", sirenID, "worker", workerId)
-	// Block until the lock becomes available and then acquire it
-	alertLock.mu.Lock()
-	log.Debug("Worker has now acquired lock on alert", "id", sirenID, "worker", workerId)
-
-	// Store the starting time of the alert processing execution
-	start := time.Now()
-	defer func() {
-		// Record the processing time so the dashboard can track the time
-		processingTime.Observe(time.Since(start).Seconds())
-	}()
-
-	// Ensure the lock is released when the function exits
-	defer alertLock.mu.Unlock()
-
-	// For new alerts, we can skip most of the processing
-	if vtec.Action == NWS.VTEC_NEW {
-		for _, ugc := range alert.Info.Area.Geocodes.UGC {
-			// Check if the UGC code is in the map
-			if code, ok := ugcMap[ugc]; ok {
-				alertsByUGC.WithLabelValues(code.Code, fmt.Sprintf("%.4f", code.Lat), fmt.Sprintf("%.4f", code.Lon)).Inc()
-			}
-		}
-
-		_, err := stateCollection.InsertOne(context.TODO(), SIREN.SirenAlert{
-			Identifier:         sirenID,
-			State:              "Active",
-			MostRecentSentTime: time.Now(),
-			LastUpdatedTime:    time.Now(),
-			UpgradedTo:         "",
-			History: []SIREN.SirenAlertHistory{
-				{
-					RecievedAt:            time.Now(),
-					VtecAction:            vtec.Action,
-					VtecActionDescription: NWS.GetLongStateName(vtec.Action),
-					AppliesTo:             alert.Info.Area.Geocodes.UGC,
-					CapID:                 alert.Identifier,
-				},
-			},
-			MostRecentCAP: alert.Identifier,
-			Areas:         alert.Info.Area.Geocodes.UGC,
-		})
-
-		if err != nil {
-			log.Error("Failed to insert the alert into the database", "id", sirenID, "worker", workerId, "err", err)
-			return
-		}
-		log.Debug("Alert is new and added to database.", "id", sirenID, "worker", workerId)
-		return
-	}
-
-	// Check if the alert is already in the database
-	var existingAlert SIREN.SirenAlert
-	err := stateCollection.FindOne(context.TODO(), bson.M{"identifier": sirenID}).Decode(&existingAlert)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			existingAlert = SIREN.SirenAlert{
-				Identifier:         sirenID,
-				State:              "Active",
-				MostRecentSentTime: time.Now(),
-				LastUpdatedTime:    time.Now(),
-				UpgradedTo:         "",
-				History:            []SIREN.SirenAlertHistory{},
-				Areas:              []string{},
-				MostRecentCAP:      alert.Identifier,
-			}
-			historyResult := findAlertHistory(alert, vtec, []string{}, workerId)
-			existingAlert.History = historyResult.History
-			existingAlert.Areas = historyResult.Areas
-
-		} else {
-			log.Error("Failed to insert the alert into the database", "id", sirenID, "worker", workerId, "err", err)
-			return
-		}
-	}
-
+func handleAlertHistory(existingAlert *SIREN.SirenAlert, alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 	// Create the history entry for this CAP
 	history := SIREN.SirenAlertHistory{
 		RecievedAt:            time.Now(),
@@ -556,6 +437,88 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 	} else {
 		existingAlert.State = "Inactive"
 	}
+}
+
+// Processes the alert and updates the database, this is the main meat of the alert processing logic.
+// It is run in a goroutine, and uses a mutex to ensure that only one goroutine can process a given event at a time.
+func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
+	// Generate a unique identifier for the alert based on its VTEC
+	sirenID := SIREN.GetCanonicalIdentifier(vtec)
+
+	// Retrieve or create a mutex lock for the alert using its unique identifier
+	alertLock := getLock(sirenID)
+	log.Debug("Attempting to aquire mutex lock", "id", sirenID, "worker", workerId)
+	// Block until the lock becomes available and then acquire it
+	alertLock.mu.Lock()
+	log.Debug("Worker has now acquired lock on alert", "id", sirenID, "worker", workerId)
+
+	// Store the starting time of the alert processing execution
+	start := time.Now()
+	defer func() {
+		// Record the processing time so the dashboard can track the time
+		processingTime.Observe(time.Since(start).Seconds())
+	}()
+
+	// Ensure the lock is released when the function exits
+	defer alertLock.mu.Unlock()
+
+	// For new alerts, we can skip most of the processing
+	if vtec.Action == NWS.VTEC_NEW {
+		_, err := stateCollection.InsertOne(context.TODO(), SIREN.SirenAlert{
+			Identifier:         sirenID,
+			State:              "Active",
+			MostRecentSentTime: time.Now(),
+			LastUpdatedTime:    time.Now(),
+			UpgradedTo:         "",
+			History: []SIREN.SirenAlertHistory{
+				{
+					RecievedAt:            time.Now(),
+					VtecAction:            vtec.Action,
+					VtecActionDescription: NWS.GetLongStateName(vtec.Action),
+					AppliesTo:             alert.Info.Area.Geocodes.UGC,
+					CapID:                 alert.Identifier,
+				},
+			},
+			MostRecentCAP: alert.Identifier,
+			Areas:         alert.Info.Area.Geocodes.UGC,
+		})
+
+		if err != nil {
+			log.Error("Failed to insert the alert into the database", "id", sirenID, "worker", workerId, "err", err)
+			return
+		}
+		log.Debug("Alert is new and added to database.", "id", sirenID, "worker", workerId)
+		return
+	}
+
+	// Check if the alert is already in the database
+	var existingAlert SIREN.SirenAlert
+	err := stateCollection.FindOne(context.TODO(), bson.M{"identifier": sirenID}).Decode(&existingAlert)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			// Create a new alert for us to work with
+			existingAlert = SIREN.SirenAlert{
+				Identifier:         sirenID,
+				State:              "Active",
+				MostRecentSentTime: time.Now(),
+				LastUpdatedTime:    time.Now(),
+				UpgradedTo:         "",
+				History:            []SIREN.SirenAlertHistory{},
+				Areas:              []string{},
+				MostRecentCAP:      alert.Identifier,
+			}
+			historyResult := findAlertHistory(alert, vtec, []string{}, workerId)
+			existingAlert.History = historyResult.History
+			existingAlert.Areas = historyResult.Areas
+
+		} else {
+			log.Error("Failed to insert the alert into the database", "id", sirenID, "worker", workerId, "err", err)
+			return
+		}
+	}
+
+	//We'll process the history here.
+	handleAlertHistory(&existingAlert, alert, vtec, workerId)
 
 	//Update the most recent sent time and CAP ID
 	existingAlert.MostRecentSentTime = alert.Sent
@@ -578,7 +541,6 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 
 // Stores the CAP alert in the database
 func storeCap(alert NWS.Alert, shortId string, workerId int) {
-
 	var existingAlert NWS.Alert
 	err := alertsCollection.FindOne(context.TODO(), bson.M{"identifier": alert.Identifier}).Decode(&existingAlert)
 	if err != nil {
@@ -621,6 +583,7 @@ func handleAlertMessage(msg string, workerId int) {
 		log.Debug("Failed to parse VTEC, skipping alert processing", "id", shortId, "worker", workerId, "err", err)
 	}
 
+	//TODO: Handle SPS (Special Weather Statements) processing
 	if vtec != nil {
 		// It's sort of hidden, but this is where the alert is actually processed
 		handleAlert(alert, vtec, workerId)
@@ -629,21 +592,7 @@ func handleAlertMessage(msg string, workerId int) {
 	// Save the CAP alert to the database
 	storeCap(alert, shortId, workerId)
 
-	// Publish the alert to the live queue
-	alertJson, err := json.Marshal(alert)
-	if err != nil {
-		log.Error("Failed to marshal the alert to JSON", "id", shortId, "worker", workerId, "err", err)
-		return
-	}
-	err = ch.Publish("", liveQueue.Name, false, false, ampq.Publishing{
-		ContentType: "application/json",
-		Body:        alertJson,
-	})
-
-	if err != nil {
-		log.Error("Failed to publish the alert to the live queue", "id", shortId, "worker", workerId, "err", err)
-		return
-	}
+	//TODO: Publish the alert to the live queue
 
 	log.Debug("Alert processed successfully, worker is free", "id", shortId, "worker", workerId)
 	alertsProcessed.Inc()
