@@ -147,7 +147,7 @@ const DataPage = () => {
 
 
       {/* Body */}
-      <div className="flex flex-col h-full min-w-[97%] m-0 gap-3 lg:m-5 xl:m-5 overflow-hidden">
+      <div className="flex flex-col h-full min-w-[97%] m-0 gap-3 lg:m-3 xl:m-2 overflow-hidden">
         {/* Filter Header */}
         <div className="flex flex-col w-full h-auto border border-[#71717a] rounded-2xl p-3">
             <h1 className="font-bold text-2xl">Search For Alerts</h1>
