@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
-import { Button, Select, SelectItem, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, getKeyValue, } from "@heroui/react";
+import { Button, Select, SelectItem, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@heroui/react";
 
 const LIVE_URL =
   import.meta.env.MODE === "production"
@@ -158,9 +158,9 @@ const DataPage = () => {
                 </div>
                 <div className="flex flex-col w-[27%] mt-1 gap-3">
                   <p className="font-bold text-md">Date Range</p>
-                  <Select label="Range" variant="#bordered" className="w-full h-auto border border-[#71717a] rounded-2xl">
+                  <Select label="Range" variant="bordered" className="w-full h-auto border border-[#71717a] rounded-2xl">
                     {dates.map((date) => (
-                      <SelectItem key={date.id} value={date.name}>
+                      <SelectItem key={date.id}>
                         {date.name}
                       </SelectItem>
                     ))}
@@ -168,9 +168,9 @@ const DataPage = () => {
                 </div>
                 <div className="flex flex-col w-[27%] mt-1 gap-3">
                   <p className="font-bold text-md">Alert Types</p>
-                  <Select label="Alert Type" variant="#bordered" className="w-full h-auto border border-[#71717a] rounded-2xl">
+                  <Select label="Alert Type" variant="bordered" className="w-full h-auto border border-[#71717a] rounded-2xl">
                     {alertTypes.map((alert) => (
-                      <SelectItem key={alert.id} value={alert.name}>
+                      <SelectItem key={alert.id}>
                         {alert.name}
                       </SelectItem>
                     ))}

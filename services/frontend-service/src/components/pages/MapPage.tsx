@@ -6,7 +6,7 @@ import { map } from 'framer-motion/client';
 const MapPage = () => {
   // Refs for MapboxGL
   const mapRef = useRef();
-  const mapContainerRef = useRef();
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
 
   //TODO:
   // getAlertPolygons(all active alerts)

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 import { Button, Switch, Select, SelectItem, Slider,Dropdown, DropdownTrigger, DropdownMenu, DropdownSection, DropdownItem} from "@heroui/react";
-import AlertType from "../elements/AlertType";
 
 const LIVE_URL =
   import.meta.env.MODE === "production"

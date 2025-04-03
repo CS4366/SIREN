@@ -35,8 +35,8 @@ const HomePage = () => {
   const [yesterdayMostAlertAreas, setYesterdayMostAlertAreas] = useState(["West Texas", "East Texas"]);
 
   // Refs for MapboxGL
-  const mapRef = useRef();
-  const mapContainerRef = useRef();
+  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
 
   // TODO: Add functionality to fetch data for components from API
   // getTotalAlertsToday
@@ -131,7 +131,7 @@ const HomePage = () => {
     
     // Add map to the mapContainerRef
     mapRef.current = new mapboxgl.Map({
-      container: mapContainerRef.current,
+      container: mapContainerRef.current as HTMLElement,
       style: 'mapbox://styles/mapbox/navigation-night-v1',
       center: [-101.87457, 33.58462],
       zoom: 5,
@@ -156,6 +156,7 @@ const HomePage = () => {
           type: 'geojson',
           data: {
             type: 'Feature',
+            properties: {}, // Add this field to satisfy the required 'properties'
             geometry: {
               type: 'Polygon',
               coordinates: coordinates,
@@ -191,7 +192,9 @@ const HomePage = () => {
 
     // Clean up on unmount
     return () => {
-      mapRef.current.remove()
+      if (mapRef.current) {
+        mapRef.current.remove();
+      }
     }
   }, [])
 

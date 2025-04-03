@@ -5,7 +5,7 @@ import HomePage from "./components/pages/HomePage";
 import DataPage from "./components/pages/DataPage";
 import MapPage from "./components/pages/MapPage";
 import SettingsPage from "./components/pages/SettingsPage";
-import { useTheme } from "@heroui/use-theme";
+//import { useTheme } from "@heroui/use-theme";
 import { useWindowSize } from "@uidotdev/usehooks";
 import HomeIcon from "./assets/home-icon.png";
 import DataIcon from "./assets/data-icon.png";
@@ -18,7 +18,7 @@ function App() {
   const navigate = useNavigate();
   const size = useWindowSize();
   const { pathname } = useLocation();
-  const { theme } = useTheme();
+  //const { theme } = useTheme();
 
   return (
     <HeroUIProvider navigate={navigate} useHref={useHref}>
