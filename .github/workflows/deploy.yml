@@ -159,3 +159,48 @@ jobs:
         if: steps.changes.outputs.src == 'true'
         run: |
           echo "Deployed ${{ matrix.app.name }} v${{ steps.semver.outputs.version }} to ghcr.io/cs4366/siren-${{ matrix.app.service }}:latest" >> $GITHUB_STEP_SUMMARY
+
+      - name: Write Changed Service to File
+        if: steps.changes.outputs.src == 'true'
+        run: echo "${{ matrix.app.service }}" > changed.txt
+
+      - name: Upload Changed Service Artifact
+        if: steps.changes.outputs.src == 'true'
+        uses: actions/upload-artifact@v3
+        with:
+          name: changed-${{ matrix.app.service }}
+          path: changed.txt
+
+  trigger_deploy:
+    name: Trigger Deploy Webhook
+    runs-on: ubuntu-latest
+    environment: production
+    needs: deploy
+    steps:
+      - name: Download Changed Services Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: changed_services
+
+      - name: Combine Changed Services
+        id: combine
+        run: |
+          # If any artifacts were uploaded, combine their contents
+          if [ -d changed_services ]; then
+            # Read each file, sort and remove duplicates
+            CHANGED=$(find changed_services -type f -exec cat {} \; | sort | uniq)
+          else
+            CHANGED=""
+          fi
+          echo "Services changed: $CHANGED"
+          # Convert list (newline separated) into a JSON array using jq
+          JSON_ARRAY=$(printf '%s\n' $CHANGED | jq -R . | jq -s .)
+          echo "changed_services=$JSON_ARRAY" >> $GITHUB_OUTPUT
+
+      - name: Trigger Deployment on Server
+        if: steps.combine.outputs.changed_services != '[]'
+        run: |
+          echo "Triggering deployment for services: ${{ steps.combine.outputs.changed_services }}"
+          curl -X POST https://siren-deploy.jaxcksn.dev/deploy \
+          -H "Content-Type: application/json" \
+          -d "{\"secret\": \"${{ secrets.DEPLOY_SECRET }}\", \"services\": ${{ steps.combine.outputs.changed_services }}, \"all\": false}"
