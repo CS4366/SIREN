@@ -467,6 +467,7 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 		_, err := stateCollection.InsertOne(context.TODO(), SIREN.SirenAlert{
 			Identifier:         sirenID,
 			State:              "Active",
+			Expires: 			alert.Info.Expires,
 			MostRecentSentTime: time.Now(),
 			LastUpdatedTime:    time.Now(),
 			UpgradedTo:         "",
@@ -500,6 +501,7 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 			existingAlert = SIREN.SirenAlert{
 				Identifier:         sirenID,
 				State:              "Active",
+				Expires: 			alert.Info.Expires,
 				MostRecentSentTime: time.Now(),
 				LastUpdatedTime:    time.Now(),
 				UpgradedTo:         "",
@@ -563,6 +565,21 @@ func storeCap(alert NWS.Alert, shortId string, workerId int) {
 	}
 }
 
+func deleteExpiredAlerts(alert NWS.Alert, shortId string, workerId int) {
+	if alert.Info.Expires.Before(time.Now()) {
+		filter := bson.M {
+			"info.expires": alert.Info.Expires,
+		}
+		_, err := alertsCollection.DeleteMany(context.TODO(), filter)
+		if err != nil {
+			log.Error("Failed to delete alert from database", "id", shortId, "worker", workerId, "err", err)
+			return
+		} else {
+			log.Debug("Alert was deleted from the database", "id", shortId)
+			return
+		}
+	}
+}
 // Handles parsing the alert JSON and processing it.
 // This is the main entry point for the alert processing logic.
 func handleAlertMessage(msg string, workerId int) {
@@ -591,7 +608,7 @@ func handleAlertMessage(msg string, workerId int) {
 
 	// Save the CAP alert to the database
 	storeCap(alert, shortId, workerId)
-
+	deleteExpiredAlerts(alert, shortId, workerId)
 	//TODO: Publish the alert to the live queue
 
 	log.Debug("Alert processed successfully, worker is free", "id", shortId, "worker", workerId)
