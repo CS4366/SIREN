@@ -565,21 +565,55 @@ func storeCap(alert NWS.Alert, shortId string, workerId int) {
 	}
 }
 
-func deleteExpiredAlerts(alert NWS.Alert, shortId string, workerId int) {
-	if alert.Info.Expires.Before(time.Now()) {
-		filter := bson.M {
-			"info.expires": alert.Info.Expires,
+// Deletes any expired alerts 
+// Is called when alerts come in, so it only clears alerts when alerts come into the db
+func deleteExpiredAlerts() {
+	var capIdsDelete []string
+	// Find oldest 25 state alerts
+	findOptions := options.Find().SetSort(bson.M{"lastUpdatedTime": 1}).SetLimit(25)
+	findOptions.SetProjection(bson.M {
+		"identifier": 1,
+		"expires": 1,
+		"history.capID": 1,
+		"lastUpdatedTime": 1,
+	})
+	// Points at first document
+	cursor, err := stateCollection.Find(context.TODO(), bson.M{}, findOptions)
+	if err != nil {
+		log.Error("Error during Find: ", err)
+		return
+	}
+	defer cursor.Close(context.TODO())
+	// Go through oldest 25 state documents
+	for cursor.Next(context.TODO()) {
+		var alert SIREN.AlertSummary
+		if err := cursor.Decode(&alert); err != nil {
+			log.Error(err)
 		}
-		_, err := alertsCollection.DeleteMany(context.TODO(), filter)
-		if err != nil {
-			log.Error("Failed to delete alert from database", "id", shortId, "worker", workerId, "err", err)
-			return
-		} else {
-			log.Debug("Alert was deleted from the database", "id", shortId)
-			return
+		// Checks if alert is expired then adds alert.history.capID to string arry
+		if alert.Expires.Before(time.Now()) {
+			// For loop since history is array 
+			for _, h := range alert.History {
+				capIdsDelete = append(capIdsDelete, h.CapID)
+			}
+			// Delete that state since it is expired 
+			deleteResult, err := stateCollection.DeleteOne(context.TODO(), bson.M{"identifier": alert.Identifier})
+			if err != nil {
+				log.Error(err)
+			}
+			log.Debug("Deleted states", "count", deleteResult.DeletedCount)
 		}
 	}
+	// Delete all alerts with matching capIDs (identifier field in alerts collection)
+	if len(capIdsDelete) > 0 {
+		deleteResult, err := alertsCollection.DeleteMany(context.TODO(), bson.M { "identifier": bson.M{"$in": capIdsDelete},})
+		if err != nil {
+			log.Error("2", err)
+		}
+		log.Debug("Deleted alerts", "count", deleteResult.DeletedCount)	
+	} else { log.Info("No alerts to delete.") }
 }
+
 // Handles parsing the alert JSON and processing it.
 // This is the main entry point for the alert processing logic.
 func handleAlertMessage(msg string, workerId int) {
@@ -608,7 +642,10 @@ func handleAlertMessage(msg string, workerId int) {
 
 	// Save the CAP alert to the database
 	storeCap(alert, shortId, workerId)
-	deleteExpiredAlerts(alert, shortId, workerId)
+
+	// Delete any expired alerts
+	deleteExpiredAlerts()
+
 	//TODO: Publish the alert to the live queue
 
 	log.Debug("Alert processed successfully, worker is free", "id", shortId, "worker", workerId)

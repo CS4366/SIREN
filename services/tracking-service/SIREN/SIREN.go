@@ -38,3 +38,12 @@ type Rectification struct {
 	History []SirenAlertHistory
 	Areas   []string
 }
+
+type AlertSummary struct {
+	Identifier         string              `bson:"identifier"`
+	Expires time.Time `bson:"expires"`
+	History []struct {
+		CapID string `bson:"capID"`
+	} `bson:"history"`
+	LastUpdatedTime    time.Time           `bson:"lastUpdatedTime"`
+}
