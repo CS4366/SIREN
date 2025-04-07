@@ -12,11 +12,13 @@
   "dependencies": {
     "@heroui/react": "^2.7.5",
     "@heroui/use-theme": "^2.1.6",
+    "@types/mapbox-gl": "^3.4.1",
     "@uidotdev/usehooks": "^2.4.1",
     "framer-motion": "^12.6.2",
     "mapbox-gl": "^3.11.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-map-gl": "^8.0.2",
     "react-router": "^7.4.0",
     "socket.io-client": "^4.8.1"
   },

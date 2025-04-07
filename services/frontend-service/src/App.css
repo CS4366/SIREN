@@ -1,0 +1,9 @@
+.mapboxgl-popup-content {
+  background-color: #242424 !important;
+  color: #fff;
+  padding: 0.5rem;
+}
+
+.mapboxgl-popup-tip {
+  border-bottom-color: #242424 !important;
+}
