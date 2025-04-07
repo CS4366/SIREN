@@ -2,8 +2,7 @@ import express, { Application, Request, Response } from "express";
 import cors from "cors";
 import { MongoClient } from "mongodb";
 import Database from "better-sqlite3";
-import e from "express";
-import { join } from "path";
+
 
 const ugcDB = new Database(process.env.SQLITE_DB || "nws_ugc.sqlite");
 
@@ -39,7 +38,7 @@ const app: Application = express();
 const PORT = process.env.PORT || 3030;
 
 //MongoDB connection
-const uri = process.env.MONGO_URL || "mongodb://localhost:27017";
+const uri = process.env.MONGO_URL || "mongodb://mongodb:27017";
 const client = new MongoClient(uri);
 client
   .connect()
