@@ -3,6 +3,7 @@ import cors from "cors";
 import { MongoClient } from "mongodb";
 import Database from "better-sqlite3";
 
+
 const ugcDB = new Database(process.env.SQLITE_DB || "nws_ugc.sqlite");
 
 interface UGCRaw {
