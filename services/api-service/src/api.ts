@@ -17,24 +17,6 @@ interface UGC {
   name: string;
 }
 
-function mapToUGC(ugcItem: any): UGC {
-  let type: "Polygon" | "MultiPolygon" = "Polygon";
-  const feature = ugcItem.get("feature");
-  if (Array.isArray(feature) && Array.isArray(feature[0][0])) {
-    type = "MultiPolygon";
-  }
-
-  return {
-    UGC: ugcItem.get("UGC"),
-    lat: ugcItem.get("lat"),
-    lon: ugcItem.get("lon"),
-    name: ugcItem.get("name"),
-    state: ugcItem.get("state"),
-    feature,
-    type,
-  };
-}
-
 function joinWithAnd(arr: string[]): string {
   if (arr.length === 0) return "";
   if (arr.length === 1) return arr[0];
@@ -48,7 +30,7 @@ const app: Application = express();
 const PORT = process.env.PORT || 3030;
 
 //MongoDB connection
-const uri = process.env.MONGO_URL || "mongodb://localhost:27017";
+const uri = process.env.MONGO_URL || "mongodb://mongodb:27017";
 const client = new MongoClient(uri);
 client
   .connect()
