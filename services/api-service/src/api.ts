@@ -1,19 +1,11 @@
 import express, { Application, Request, Response } from "express";
 import cors from "cors";
 import { MongoClient } from "mongodb";
-import Database from "better-sqlite3";
+import { open } from "lmdb";
 
-
-const ugcDB = new Database(process.env.SQLITE_DB || "nws_ugc.sqlite");
-
-interface UGCRaw {
-  UGC: string;
-  feature: string;
-  lat: number;
-  lon: number;
-  state: string;
-  name: string;
-}
+const ugcDB = open(process.env.LMDB_DB || "nws_ugc.lmdb", {
+  noSubdir: true,
+});
 
 interface UGC {
   UGC: string;
@@ -23,6 +15,24 @@ interface UGC {
   lon: number;
   state: string;
   name: string;
+}
+
+function mapToUGC(ugcItem: any): UGC {
+  let type: "Polygon" | "MultiPolygon" = "Polygon";
+  const feature = ugcItem.get("feature");
+  if (Array.isArray(feature) && Array.isArray(feature[0][0])) {
+    type = "MultiPolygon";
+  }
+
+  return {
+    UGC: ugcItem.get("UGC"),
+    lat: ugcItem.get("lat"),
+    lon: ugcItem.get("lon"),
+    name: ugcItem.get("name"),
+    state: ugcItem.get("state"),
+    feature,
+    type,
+  };
 }
 
 function joinWithAnd(arr: string[]): string {
@@ -38,7 +48,7 @@ const app: Application = express();
 const PORT = process.env.PORT || 3030;
 
 //MongoDB connection
-const uri = process.env.MONGO_URL || "mongodb://mongodb:27017";
+const uri = process.env.MONGO_URL || "mongodb://localhost:27017";
 const client = new MongoClient(uri);
 client
   .connect()
@@ -51,39 +61,69 @@ client
 const db = client.db("siren");
 const events = db.collection("state");
 
-const getUGCInfoArray = (ugc: string[]): UGC[] => {
-  const ugcInfo = ugc.map((ugcItem) =>
-    ugcDB
-      .prepare<string, UGCRaw>(`SELECT * FROM ugc WHERE UGC = ?`)
-      .get(ugcItem)
-  );
-
-  if (ugcInfo.length === 0) {
-    throw new Error("No UGC found");
+// Retrieve an array of UGC records from LMDB based on UGC codes
+const getUGCInfoArray = async (ugc: string[]): Promise<UGC[]> => {
+  const info = await ugcDB.getMany(ugc);
+  if (info.length === 0) {
+    return [];
   }
 
-  return ugcInfo.map((info: any) => {
-    return {
-      ...info,
-      feature: JSON.parse(info.feature),
-      type: info.feature.includes("[[[") ? "MultiPolygon" : "Polygon",
-    };
-  });
+  const ugcs: UGC[] = [];
+
+  for (const ugcItem of info) {
+    if (!ugcItem) {
+      continue;
+    }
+
+    let type: "Polygon" | "MultiPolygon" = "Polygon";
+    let feature = ugcItem.get("feature");
+    if (Array.isArray(feature)) {
+      if (Array.isArray(feature[0][0])) {
+        type = "MultiPolygon";
+      }
+    }
+
+    ugcs.push({
+      UGC: ugcItem.get("UGC"),
+      lat: ugcItem.get("lat"),
+      lon: ugcItem.get("lon"),
+      name: ugcItem.get("name"),
+      state: ugcItem.get("state"),
+      feature: feature,
+      type: type,
+    });
+  }
+  return ugcs;
 };
 
-const getUGCInfo = async (ugc: string): Promise<UGC> => {
-  const ugcInfo = ugcDB
-    .prepare<string, UGCRaw>(`SELECT * FROM ugc WHERE UGC = ?`)
-    .get(ugc);
-  if (!ugcInfo) {
-    throw new Error("No UGC found");
-  }
+const getUGCInfo = (ugc: string): UGC => {
+  try {
+    const ugcInfo = ugcDB.get(ugc);
+    if (!ugcInfo) {
+      throw new Error("No UGC found");
+    }
 
-  return {
-    ...ugcInfo,
-    feature: JSON.parse(ugcInfo.feature),
-    type: ugcInfo.feature.includes("[[[") ? "MultiPolygon" : "Polygon",
-  };
+    let type: "Polygon" | "MultiPolygon" = "Polygon";
+    let feature = ugcInfo.get("feature");
+    if (Array.isArray(feature)) {
+      if (Array.isArray(feature[0][0])) {
+        type = "MultiPolygon";
+      }
+    }
+
+    return {
+      UGC: ugcInfo.get("UGC"),
+      lat: ugcInfo.get("lat"),
+      lon: ugcInfo.get("lon"),
+      name: ugcInfo.get("name"),
+      state: ugcInfo.get("state"),
+      feature: feature,
+      type: type,
+    };
+  } catch (error) {
+    console.error("Error fetching UGC info", error);
+    throw error;
+  }
 };
 
 // Use middleware JSON
@@ -96,13 +136,14 @@ app.get("/", (req: Request, res: Response) => {
 });
 
 app.get("/active", async (req: Request, res: Response) => {
-  if (client) {
+  if (!client) {
+    res.status(500).send("MongoDB not connected");
+    return;
+  }
+
+  try {
     const active = events.aggregate([
-      {
-        $match: {
-          state: "Active",
-        },
-      },
+      { $match: { state: "Active" } },
       {
         $lookup: {
           from: "alerts",
@@ -111,48 +152,40 @@ app.get("/active", async (req: Request, res: Response) => {
           as: "capInfo",
         },
       },
-      {
-        $unwind: "$capInfo",
-      },
-      {
-        $match: {
-          "capInfo.info.expires": {
-            $gt: new Date(),
-          }, // Not expired
-        },
-      },
+      { $unwind: "$capInfo" },
+      { $match: { "capInfo.info.expires": { $gt: new Date() } } },
     ]);
 
     const activeEvents = await active.toArray();
-    activeEvents.forEach((event, index) => {
-      let features = getUGCInfoArray(event.areas);
-      let areaDesc = joinWithAnd(
-        features.map((info) => `${info.name} ${info.state}`)
-      );
+    const updatedEvents = await Promise.all(
+      activeEvents.map(async (event) => {
+        const features = await getUGCInfoArray(event.areas);
+        const areaDesc = joinWithAnd(
+          features.map((info) => `${info.name} ${info.state}`)
+        );
 
-      if (event.capInfo.info.area.polygon == null) {
-        activeEvents[index] = {
-          ...event,
-          features: features.map((info) => {
-            return {
+        if (event.capInfo.info.area.polygon == null) {
+          return {
+            ...event,
+            features: features.map((info) => ({
               data: info.feature,
               type: info.type,
-            };
-          }),
-          areaDescription: areaDesc,
-        };
-      } else {
-        activeEvents[index] = {
-          ...event,
-          // Join each features.name with a comma except for the last one
-          areaDescription: areaDesc,
-        };
-      }
-    });
+            })),
+            areaDescription: areaDesc,
+          };
+        } else {
+          return {
+            ...event,
+            areaDescription: areaDesc,
+          };
+        }
+      })
+    );
 
-    res.status(200).json(activeEvents);
-  } else {
-    res.status(500).send("MongoDB not connected");
+    res.status(200).json(updatedEvents);
+  } catch (error) {
+    console.error("Error fetching active events", error);
+    res.status(500).send("Error fetching active events");
   }
 });
 
