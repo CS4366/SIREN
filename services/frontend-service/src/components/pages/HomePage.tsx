@@ -36,6 +36,8 @@ const API_URL =
     : "http://localhost:3030";
 
 const HomePage = () => {
+  const [isLoading, setIsLoading] = useState(true);
+
   // State variables for push and API connection status
   const [isPushConnected, setIsPushConnected] = useState(socket.connected);
   const [isAPIConnected, setIsAPIConnected] = useState(false);
@@ -156,15 +158,20 @@ const HomePage = () => {
   }, []);
 
   useEffect(() => {
-    fetch(`${API_URL}/active`).then((res) => {
-      if (res.ok) {
-        res.json().then((data) => {
-          setAlertData(data);
-        });
-      } else {
-        console.log("Error fetching data");
-      }
-    });
+    setIsLoading(true);
+    fetch(`${API_URL}/active`)
+      .then((res) => {
+        if (res.ok) {
+          res.json().then((data) => {
+            setAlertData(data);
+          });
+        } else {
+          console.log("Error fetching data");
+        }
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -239,6 +246,46 @@ const HomePage = () => {
       features: countyFeatures.filter(Boolean),
     });
   }, [alertData]);
+
+  const getAlertList = () => {
+    if (isLoading) {
+      return (
+        <div className="flex justify-center items-center w-full h-full">
+          <p className="text-white text-lg">Loading...</p>
+        </div>
+      );
+    } else if (alertData.length === 0) {
+      return (
+        <div className="flex justify-center items-center w-full h-full">
+          <p className="text-white text-lg">No active alerts</p>
+        </div>
+      );
+    } else {
+      return alertData.map((alert: SirenAlert, index: number) => {
+        return (
+          <Alert
+            key={index}
+            alertType={alert.capInfo.info.event}
+            alertIssue={alert.capInfo.sender}
+            alertAreas={
+              alert.areaDescription.length >
+              (alert.capInfo?.info?.area?.description?.length || 0)
+                ? alert.capInfo.info.area.description
+                : alert.areaDescription
+            }
+            alertStartTime={alert.capInfo.info.effective}
+            alertEndTime={alert.capInfo.info.expires}
+            alertDescription={alert.capInfo.info.description.replace("/n", " ")}
+            alertInstructions={alert.capInfo.info.instruction}
+            alertHistory={["Alert Issued", "Alert Updated - Time Extended"]}
+            color={
+              AlertColorMap.get(alert.capInfo.info.eventcode.nws) || "#efefef"
+            }
+          />
+        );
+      });
+    }
+  };
 
   const handleMapClick = (event: MapMouseEvent) => {
     event.preventDefault();
@@ -394,36 +441,7 @@ const HomePage = () => {
               />
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto">
-              {alertData.map((alert: SirenAlert, index: number) => {
-                return (
-                  <Alert
-                    key={index}
-                    alertType={alert.capInfo.info.event}
-                    alertIssue={alert.capInfo.sender}
-                    alertAreas={
-                      alert.areaDescription.length >
-                      (alert.capInfo?.info?.area?.description?.length || 0)
-                        ? alert.capInfo.info.area.description
-                        : alert.areaDescription
-                    }
-                    alertStartTime={alert.capInfo.info.effective}
-                    alertEndTime={alert.capInfo.info.expires}
-                    alertDescription={alert.capInfo.info.description.replace(
-                      "/n",
-                      " "
-                    )}
-                    alertInstructions={alert.capInfo.info.instruction}
-                    alertHistory={[
-                      "Alert Issued",
-                      "Alert Updated - Time Extended",
-                    ]}
-                    color={
-                      AlertColorMap.get(alert.capInfo.info.eventcode.nws) ||
-                      "#efefef"
-                    }
-                  />
-                );
-              })}
+              {getAlertList()}
             </div>
           </div>
         </div>
