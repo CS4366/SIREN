@@ -251,13 +251,13 @@ const HomePage = () => {
     if (isLoading) {
       return (
         <div className="flex justify-center items-center w-full h-full">
-          <p className="text-white text-lg">Loading...</p>
+          <p className="text-white text-lg">Loading Alerts...</p>
         </div>
       );
     } else if (alertData.length === 0) {
       return (
         <div className="flex justify-center items-center w-full h-full">
-          <p className="text-white text-lg">No active alerts</p>
+          <p className="text-white text-lg">No active alerts found!</p>
         </div>
       );
     } else {
