@@ -31,11 +31,10 @@ We have decided to meet irregularly, and communicate via group message on an as-
 
 #### Upcoming Meetings:
 
-Our next meeting with be on March 6th, where we will:
+Our next meeting with be on April 10th, where we will:
 
-- Discuss and plan for Stage 2
-- Discuss our plan for the alert tracking service
-- Discuss a potential UI mockup design
+- Discuss outcomes and problems from the first sprint
+- Discuss and plan second sprint
 
 #### Past Meetings:
 
@@ -54,3 +53,22 @@ Our pre-presentation meeting was on Feb 18th, in which we went through our prese
 - Refined our presentation.
 - Determined who would read which part of the application.
 - Talked a bit about the overall architecture.
+
+##### March 11th, 2025
+
+Our initial stage 2 meeting was on March 11th, we discussed system design decisions and started to mock up the UI of the Frontend.
+
+- Discussed Tracking Service architecture and language
+- Created MongoDB schema for the alerts
+- We all proposed potential UI designs, and discussed the how our final UI design
+- Discussed the report and presentation
+
+##### March 26th, 2025
+
+Our pre-presentation stage 2 meeting was on March 26th, in which we finished up the presentation/report and discussed roles moving forward.
+
+- Revised and finished the presentation
+- Revised the report and discussed potential points to mention in it
+- Discussed microservice implementation, especially the Frontend
+- Gave roles for implementation and organized first 2-week sprint
+
