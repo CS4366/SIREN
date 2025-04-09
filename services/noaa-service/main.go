@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"crypto/tls"
-	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"log"
@@ -16,6 +15,8 @@ import (
 	"github.com/joho/godotenv"
 	ampq "github.com/rabbitmq/amqp091-go"
 	"github.com/xmppo/go-xmpp"
+
+	"github.com/vmihailenco/msgpack"
 )
 
 func debugLog(msg string) {
@@ -221,17 +222,16 @@ func handleAlertXML(alerts <-chan string) {
 			continue
 		}
 
-		alertJsonBytes, err := json.Marshal(alertJson)
+		alertJsonBytes, err := msgpack.Marshal(alertJson)
 		if err != nil {
 			log.Printf("Failed to convert alert to JSON: %v\n", err)
 			continue
 		}
-		debugLog(fmt.Sprintf("\nCAP Found: %s\n\n", string(alertJsonBytes)))
 
 		//Marshall to JSON and Send alert to message queue
 		err = ch.Publish("", trackingQueue.Name, false, false, ampq.Publishing{
-			ContentType: "application/json",
-			Body:        []byte(alertJsonBytes),
+			ContentType: "application/msgpack",
+			Body:        alertJsonBytes,
 		})
 		if err != nil {
 			log.Printf("Failed to publish alert to message queue: %v\n", err)

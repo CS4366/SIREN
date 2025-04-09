@@ -7,7 +7,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -27,6 +26,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/vmihailenco/msgpack"
 )
 
 /**============================================
@@ -213,7 +214,7 @@ func main() {
 	for i := 0; i < 10; i++ {
 		go func(workerID int) {
 			for d := range msgs {
-				handleAlertMessage(string(d.Body), workerID)
+				handleAlertMessage(d.Body, workerID)
 			}
 		}(i)
 	}
@@ -565,11 +566,11 @@ func storeCap(alert NWS.Alert, shortId string, workerId int) {
 
 // Handles parsing the alert JSON and processing it.
 // This is the main entry point for the alert processing logic.
-func handleAlertMessage(msg string, workerId int) {
+func handleAlertMessage(msg []byte, workerId int) {
 	alertsReceived.Inc()
 	var alert NWS.Alert
 	// Unmarshal the message
-	err := json.Unmarshal([]byte(msg), &alert)
+	err := msgpack.Unmarshal(msg, &alert)
 	if err != nil {
 		log.Error("Failed to unmarshal the alert", "worker", workerId, "err", err)
 		return
