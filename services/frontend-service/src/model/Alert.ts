@@ -9,9 +9,13 @@ export interface SirenAlert {
   lastUpdatedTime: Date;
   history: AlertHistory[];
   areas: string[];
+  geometry: SirenGeometry;
   capInfo: any;
-  features?: AlertFeature[];
-  areaDescription: string;
+}
+
+export interface SirenGeometry {
+  geometryType: "Polygon" | "MultiPolygon";
+  coordinates: Position[] | Position[][];
 }
 
 export interface AlertHistory {

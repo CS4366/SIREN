@@ -203,39 +203,37 @@ const HomePage = () => {
     //Do county next
     const countyFeatures: GeoJSON.Feature[] = [];
     alertData.forEach((alert: SirenAlert) => {
-      if (alert.features) {
-        for (const feature of alert.features) {
-          if (feature.type === "Polygon") {
-            countyFeatures.push({
-              type: "Feature",
-              geometry: {
-                type: "Polygon",
-                coordinates: [feature.data as Position[]],
-              },
-              properties: {
-                id: alert.identifier,
-                name: alert.capInfo.info.event,
-                color:
-                  AlertColorMap.get(alert.capInfo.info.eventcode.nws) ||
-                  "#efefef",
-              },
-            });
-          } else if (feature.type === "MultiPolygon") {
-            countyFeatures.push({
-              type: "Feature",
-              geometry: {
-                type: "MultiPolygon",
-                coordinates: [feature.data as Position[][]],
-              },
-              properties: {
-                id: alert.identifier,
-                name: alert.capInfo.info.event,
-                color:
-                  AlertColorMap.get(alert.capInfo.info.eventcode.nws) ||
-                  "#efefef",
-              },
-            });
-          }
+      if (alert.geometry && alert.geometry.coordinates) {
+        if (alert.geometry.geometryType === "Polygon") {
+          countyFeatures.push({
+            type: "Feature",
+            geometry: {
+              type: "Polygon",
+              coordinates: [alert.geometry.coordinates as Position[]],
+            },
+            properties: {
+              id: alert.identifier,
+              name: alert.capInfo.info.event,
+              color:
+                AlertColorMap.get(alert.capInfo.info.eventcode.nws) ||
+                "#efefef",
+            },
+          });
+        } else if (alert.geometry.geometryType === "MultiPolygon") {
+          countyFeatures.push({
+            type: "Feature",
+            geometry: {
+              type: "MultiPolygon",
+              coordinates: [alert.geometry.coordinates as Position[][]],
+            },
+            properties: {
+              id: alert.identifier,
+              name: alert.capInfo.info.event,
+              color:
+                AlertColorMap.get(alert.capInfo.info.eventcode.nws) ||
+                "#efefef",
+            },
+          });
         }
       }
     });
@@ -267,12 +265,7 @@ const HomePage = () => {
             key={index}
             alertType={alert.capInfo.info.event}
             alertIssue={alert.capInfo.sender}
-            alertAreas={
-              alert.areaDescription.length >
-              (alert.capInfo?.info?.area?.description?.length || 0)
-                ? alert.capInfo.info.area.description
-                : alert.areaDescription
-            }
+            alertAreas={alert.capInfo.info.area.description}
             alertStartTime={alert.capInfo.info.effective}
             alertEndTime={alert.capInfo.info.expires}
             alertDescription={alert.capInfo.info.description.replace("/n", " ")}
