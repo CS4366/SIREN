@@ -16,6 +16,9 @@ FROM scratch
 # Need to copy the CA certificates from the builder stage
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /app/docker-tracking-service /docker-tracking-service
+COPY --from=builder /app/nws_county.db /nws_county.db
+COPY --from=builder /app/nws_zone.db /nws_zone.db
+COPY --from=builder /app/nws_marine.db /nws_marine.db
 
 # Add image metadata labels
 LABEL org.opencontainers.image.source="https://github.com/CS4366/SIREN"
