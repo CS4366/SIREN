@@ -91,6 +91,7 @@ jobs:
             { name: "Frontend Service", service: "frontend-service" },
             { name: "API Service", service: "api-service" },
             { name: "Push Service", service: "push-service" },
+            { name: "Geo Service", service: "geo-service" },
           ]
     steps:
       - name: Checkout

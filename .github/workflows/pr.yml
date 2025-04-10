@@ -35,6 +35,11 @@ jobs:
               path: "services/push-service",
               build-type: "node",
             },
+            {
+              name: "Geo Service",
+              path: "services/geo-service",
+              build-type: "go",
+            },
           ]
     steps:
       - name: Checkout

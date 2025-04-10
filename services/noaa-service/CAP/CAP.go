@@ -111,141 +111,141 @@ type ValueXML string
 /* -------------------------------- JSON CAP -------------------------------- */
 
 type Alert struct {
-	Identifier  string      `json:"identifier"`
-	Sender      string      `json:"sender"`
-	Sent        time.Time   `json:"sent"`
-	Status      string      `json:"status"`
-	MsgType     string      `json:"msgType"`
-	Source      string      `json:"source"`
-	Scope       string      `json:"scope"`
-	Restriction string      `json:"restriction,omitempty"`
-	Addresses   string      `json:"addresses,omitempty"`
-	Code        []string    `json:"code"`
-	Note        string      `json:"note,omitempty"`
-	References  []Reference `json:"references,omitempty"`
-	Incidents   string      `json:"incidents,omitempty"`
-	Info        Info        `json:"info"`
-	InfoSpanish *Info       `json:"infoSpanish,omitempty"`
+	Identifier  string      `msgpack:"identifier"`
+	Sender      string      `msgpack:"sender"`
+	Sent        time.Time   `msgpack:"sent"`
+	Status      string      `msgpack:"status"`
+	MsgType     string      `msgpack:"msgType"`
+	Source      string      `msgpack:"source"`
+	Scope       string      `msgpack:"scope"`
+	Restriction string      `msgpack:"restriction,omitempty"`
+	Addresses   string      `msgpack:"addresses,omitempty"`
+	Code        []string    `msgpack:"code"`
+	Note        string      `msgpack:"note,omitempty"`
+	References  []Reference `msgpack:"references,omitempty"`
+	Incidents   string      `msgpack:"incidents,omitempty"`
+	Info        Info        `msgpack:"info"`
+	InfoSpanish *Info       `msgpack:"infoSpanish,omitempty"`
 }
 
 type Reference struct {
-	Sender     string    `json:"sender"`
-	Identifier string    `json:"identifier"`
-	Sent       time.Time `json:"sent"`
+	Sender     string    `msgpack:"sender"`
+	Identifier string    `msgpack:"identifier"`
+	Sent       time.Time `msgpack:"sent"`
 }
 
 type Info struct {
-	Language     string      `json:"language"`
-	Categories   Categories  `json:"categories"`
-	Event        string      `json:"event"`
-	ResponseType string      `json:"responseType"`
-	Urgency      string      `json:"urgency"`
-	Severity     string      `json:"severity"`
-	Certainty    string      `json:"certainty"`
-	Audience     string      `json:"audience,omitempty"`
-	EventCode    EventCode   `json:"eventCode"`
-	Effective    time.Time   `json:"effective"`
-	Onset        time.Time   `json:"onset"`
-	Expires      time.Time   `json:"expires"`
-	SenderName   string      `json:"senderName"`
-	Headline     string      `json:"headline"`
-	Description  string      `json:"description"`
-	Instruction  string      `json:"instruction"`
-	Web          string      `json:"web"`
-	Contact      string      `json:"contact"`
-	Parameters   *Parameters `json:"parameters,omitempty"`
-	Resource     []Resource  `json:"resource,omitempty"`
-	Area         Area        `json:"area"`
+	Language     string      `msgpack:"language"`
+	Categories   Categories  `msgpack:"categories"`
+	Event        string      `msgpack:"event"`
+	ResponseType string      `msgpack:"responseType"`
+	Urgency      string      `msgpack:"urgency"`
+	Severity     string      `msgpack:"severity"`
+	Certainty    string      `msgpack:"certainty"`
+	Audience     string      `msgpack:"audience,omitempty"`
+	EventCode    EventCode   `msgpack:"eventCode"`
+	Effective    time.Time   `msgpack:"effective"`
+	Onset        time.Time   `msgpack:"onset"`
+	Expires      time.Time   `msgpack:"expires"`
+	SenderName   string      `msgpack:"senderName"`
+	Headline     string      `msgpack:"headline"`
+	Description  string      `msgpack:"description"`
+	Instruction  string      `msgpack:"instruction"`
+	Web          string      `msgpack:"web"`
+	Contact      string      `msgpack:"contact"`
+	Parameters   *Parameters `msgpack:"parameters,omitempty"`
+	Resource     []Resource  `msgpack:"resource,omitempty"`
+	Area         Area        `msgpack:"area"`
 }
 
 type Categories struct {
-	Geo       bool `json:"Geo"`
-	Met       bool `json:"Met"`
-	Safety    bool `json:"Safety"`
-	Rescue    bool `json:"Rescue"`
-	Fire      bool `json:"Fire"`
-	Health    bool `json:"Health"`
-	Env       bool `json:"Env"`
-	Transport bool `json:"Transport"`
-	Infra     bool `json:"Infra"`
-	CBRNE     bool `json:"CBRNE"`
-	Other     bool `json:"Other"`
+	Geo       bool `msgpack:"Geo"`
+	Met       bool `msgpack:"Met"`
+	Safety    bool `msgpack:"Safety"`
+	Rescue    bool `msgpack:"Rescue"`
+	Fire      bool `msgpack:"Fire"`
+	Health    bool `msgpack:"Health"`
+	Env       bool `msgpack:"Env"`
+	Transport bool `msgpack:"Transport"`
+	Infra     bool `msgpack:"Infra"`
+	CBRNE     bool `msgpack:"CBRNE"`
+	Other     bool `msgpack:"Other"`
 }
 
 type EventCode struct {
-	SAME string `json:"SAME"`
-	NWS  string `json:"NWS"`
+	SAME string `msgpack:"SAME"`
+	NWS  string `msgpack:"NWS"`
 }
 
 type Parameters struct {
-	AWIPSidentifier          string                  `json:"AWIPSidentifier,omitempty"`
-	WMOidentifier            string                  `json:"WMOidentifier,omitempty"`
-	NWSheadline              string                  `json:"NWSheadline,omitempty"`
-	EventMotionDescription   *EventMotionDescription `json:"eventMotionDescription,omitempty"`
-	WindThreat               string                  `json:"windThreat,omitempty"`
-	MaxWindGust              float64                 `json:"maxWindGust,omitempty"`
-	HailThreat               string                  `json:"hailThreat,omitempty"`
-	MaxHailSize              float64                 `json:"maxHailSize,omitempty"`
-	ThunderstormDamageThreat string                  `json:"thunderstormDamageThreat,omitempty"`
-	TornadoDetection         string                  `json:"tornadoDetection,omitempty"`
-	TornadoDamageThreat      string                  `json:"tornadoDamageThreat,omitempty"`
-	FlashFloodDetection      string                  `json:"flashFloodDetection,omitempty"`
-	FlashFloodDamageThreat   string                  `json:"flashFloodDamageThreat,omitempty"`
-	SnowSquallDetection      string                  `json:"snowSquallDetection,omitempty"`
-	SnowSquallImpact         string                  `json:"snowSquallImpact,omitempty"`
-	WaterspoutDetection      string                  `json:"waterspoutDetection,omitempty"`
-	BlockChannels            BlockChannels           `json:"blockChannels,omitempty"`
-	EASORG                   string                  `json:"EAS-ORG,omitempty"`
-	VTEC                     string                  `json:"VTEC,omitempty"`
-	EventEndingTime          time.Time               `json:"eventEndingTime,omitempty"`
-	WEAHandlingCode          string                  `json:"WEAHandling,omitempty"`
-	CMAMtext                 string                  `json:"CMAMtext,omitempty"`
-	CMAMlongtext             string                  `json:"CMAMlongtext,omitempty"`
-	ExpiredReferences        []Reference             `json:"expiredReferences,omitempty"`
+	AWIPSidentifier          string                  `msgpack:"AWIPSidentifier,omitempty"`
+	WMOidentifier            string                  `msgpack:"WMOidentifier,omitempty"`
+	NWSheadline              string                  `msgpack:"NWSheadline,omitempty"`
+	EventMotionDescription   *EventMotionDescription `msgpack:"eventMotionDescription,omitempty"`
+	WindThreat               string                  `msgpack:"windThreat,omitempty"`
+	MaxWindGust              float64                 `msgpack:"maxWindGust,omitempty"`
+	HailThreat               string                  `msgpack:"hailThreat,omitempty"`
+	MaxHailSize              float64                 `msgpack:"maxHailSize,omitempty"`
+	ThunderstormDamageThreat string                  `msgpack:"thunderstormDamageThreat,omitempty"`
+	TornadoDetection         string                  `msgpack:"tornadoDetection,omitempty"`
+	TornadoDamageThreat      string                  `msgpack:"tornadoDamageThreat,omitempty"`
+	FlashFloodDetection      string                  `msgpack:"flashFloodDetection,omitempty"`
+	FlashFloodDamageThreat   string                  `msgpack:"flashFloodDamageThreat,omitempty"`
+	SnowSquallDetection      string                  `msgpack:"snowSquallDetection,omitempty"`
+	SnowSquallImpact         string                  `msgpack:"snowSquallImpact,omitempty"`
+	WaterspoutDetection      string                  `msgpack:"waterspoutDetection,omitempty"`
+	BlockChannels            BlockChannels           `msgpack:"blockChannels,omitempty"`
+	EASORG                   string                  `msgpack:"EAS-ORG,omitempty"`
+	VTEC                     string                  `msgpack:"VTEC,omitempty"`
+	EventEndingTime          time.Time               `msgpack:"eventEndingTime,omitempty"`
+	WEAHandlingCode          string                  `msgpack:"WEAHandling,omitempty"`
+	CMAMtext                 string                  `msgpack:"CMAMtext,omitempty"`
+	CMAMlongtext             string                  `msgpack:"CMAMlongtext,omitempty"`
+	ExpiredReferences        []Reference             `msgpack:"expiredReferences,omitempty"`
 }
 
 type EventMotionDescription struct {
-	Timestamp time.Time    `json:"timestamp"`
-	Direction string       `json:"direction"` // Expected to be a three-digit string (non-`000`)
-	Speed     string       `json:"speed"`     // A one- or two-digit value (without leading zero unless `0`)
-	Location  []Coordinate `json:"location"`  // One or more coordinate pairs
+	Timestamp time.Time    `msgpack:"timestamp"`
+	Direction string       `msgpack:"direction"` // Expected to be a three-digit string (non-`000`)
+	Speed     string       `msgpack:"speed"`     // A one- or two-digit value (without leading zero unless `0`)
+	Location  []Coordinate `msgpack:"location"`  // One or more coordinate pairs
 }
 
 type Coordinate struct {
-	Lat float64 `json:"lat"`
-	Lon float64 `json:"lon"`
+	Lat float64 `msgpack:"lat"`
+	Lon float64 `msgpack:"lon"`
 }
 
 type BlockChannels struct {
-	CMAS   bool `json:"CMAS"`
-	EAS    bool `json:"EAS"`
-	NWEM   bool `json:"NWEM"`
-	Public bool `json:"Public"`
+	CMAS   bool `msgpack:"CMAS"`
+	EAS    bool `msgpack:"EAS"`
+	NWEM   bool `msgpack:"NWEM"`
+	Public bool `msgpack:"Public"`
 }
 
 type Resource struct {
-	ResourceDesc string `json:"resourceDesc"`
-	MimeType     string `json:"mimeType"`
-	Size         int    `json:"size"`
-	URI          string `json:"uri"`
-	DerefURI     string `json:"derefUri"`
-	Digest       string `json:"digest"`
+	ResourceDesc string `msgpack:"resourceDesc"`
+	MimeType     string `msgpack:"mimeType"`
+	Size         int    `msgpack:"size"`
+	URI          string `msgpack:"uri"`
+	DerefURI     string `msgpack:"derefUri"`
+	Digest       string `msgpack:"digest"`
 }
 
 type Area struct {
-	Description string          `json:"description"`
-	Polygon     *GeoJSONPolygon `json:"polygon,omitempty"`
-	Geocodes    Geocodes        `json:"geocodes"`
+	Description string          `msgpack:"description"`
+	Polygon     *GeoJSONPolygon `msgpack:"polygon,omitempty"`
+	Geocodes    Geocodes        `msgpack:"geocodes"`
 }
 
 type GeoJSONPolygon struct {
-	Type        string        `json:"type"` // should always be `Polygon`
-	Coordinates [][][]float64 `json:"coordinates"`
+	Type        string        `msgpack:"type"` // should always be `Polygon`
+	Coordinates [][][]float64 `msgpack:"coordinates"`
 }
 
 type Geocodes struct {
-	UGC  []string `json:"UGC"`
-	SAME []string `json:"SAME"`
+	UGC  []string `msgpack:"UGC"`
+	SAME []string `msgpack:"SAME"`
 }
 
 func ConvertXMLToJsonStruct(old *AlertXML) (*Alert, error) {

@@ -1,21 +1,28 @@
 services:
   # SIREN NWWS Connection Service
   noaa-service:
-    image: ghcr.io/cs4366/siren-noaa-service:latest
+    image: ghcr.io/cs4366/siren-noaa-service:geoprocessing.dev
+    container_name: noaa-service
+    stop_grace_period: 5s
+    restart: always
     networks:
       - siren-network
     environment:
       - ENV=PROD
       - RABBITMQ_URL=amqp://rabbitmq
-      - NWWS_USER=REPLACE_ME
-      - NWWS_PASSWORD=REPLACE_ME
-      - NWWS_NICKNAME=SIREN.TTU.PROD
+      - NWWS_USER=CHANGE_ME
+      - NWWS_PASSWORD=CHANGE_ME
+      - NWWS_NICKNAME=CHANGE_ME
     depends_on:
       message-queue:
         condition: service_healthy
   # SIREN Alert Tracking Service
   tracking-service:
-    image: ghcr.io/cs4366/siren-tracking-service:latest
+    container_name: tracking-service
+    ports:
+      - "6091:6091"
+    image: ghcr.io/cs4366/siren-tracking-service:geoprocessing.dev
+    restart: always
     networks:
       - siren-network
     environment:
@@ -25,27 +32,30 @@ services:
     depends_on:
       message-queue:
         condition: service_healthy
-  # SIREN Frontend
+  # SIREN Frontend Service
   frontend-service:
-    image: ghcr.io/cs4366/siren-frontend-service:latest
+    container_name: frontend-service
+    image: ghcr.io/cs4366/siren-frontend-service:geoprocessing.dev
     networks:
       - siren-network
     ports:
       - "8080:80"
   # SIREN API Service
   api-service:
-    image: ghcr.io/cs4366/siren-api-service:latest
+    container_name: api-service
+    image: ghcr.io/cs4366/siren-api-service:geoprocessing.dev
     networks:
       - siren-network
     ports:
       - "3030:3030"
     environment:
       - PORT=3030
+      - MONGO_URL=mongodb://mongodb:27017
     depends_on:
       - db
-      - redis
   # SIREN Push Service
   push-service:
+    container_name: push-service
     image: ghcr.io/cs4366/siren-push-service:latest
     networks:
       - siren-network
@@ -56,6 +66,19 @@ services:
     depends_on:
       message-queue:
         condition: service_healthy
+  # SIREN Geo Service
+  geo-service:
+    container_name: geo-service
+    image: ghcr.io/cs4366/siren-geo-service:geoprocessing.dev
+    networks:
+      - siren-network
+    ports:
+      - "6906:6906"
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017
+    depends_on:
+      depends_on:
+        - db
 
   # RabbitMQ Message Queue
   message-queue:
@@ -73,15 +96,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # REDIS Cache
-  redis:
-    image: redis:latest
-    ports:
-      - 6379:6379
-    restart: always
-    networks:
-      - siren-network
-
   # MongoDB Database
   db:
     image: mongo:latest
@@ -92,8 +106,9 @@ services:
     networks:
       - siren-network
     volumes:
+      - ./mongo-init:/docker-entrypoint-initdb.d:ro
       - mongodb_data:/data/db
-  # Prometheus - This service collects metrics from the other services
+
   prometheus:
     image: prom/prometheus:latest
     ports:
@@ -103,7 +118,7 @@ services:
     restart: always
     networks:
       - siren-network
-  # cadvisor - This service collects metrics from the and containers
+
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
@@ -119,7 +134,7 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
     networks:
       - siren-network
-  # Node Exporter - This service collects system metrics from the host machine
+
   node-exporter:
     image: prom/node-exporter:latest
     container_name: node-exporter
@@ -137,16 +152,18 @@ services:
       - 9100
     networks:
       - siren-network
-  # Grafana Dashboard
+
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
     ports:
       - 3000:3000
     volumes:
+      - ./grafana-plugins:/var/lib/grafana/plugins
       - grafana_data:/var/lib/grafana
     restart: always
     environment:
+      - GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=haohanyang-mongodb-datasource
       - GF_SERVER_SERVE_FROM_SUB_PATH=false
       - GF_SERVER_ROOT_URL=https://siren-dashboard.jaxcksn.dev/
     networks:
