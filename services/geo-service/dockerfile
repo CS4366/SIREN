@@ -1,0 +1,27 @@
+# Build Stage: Use the full Golang image to build the binary
+FROM golang:1.24.2 AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o docker-geo-service .
+
+# Final Stage: Use a minimal base image
+FROM scratch
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /app/docker-geo-service /docker-geo-service
+COPY --from=builder /app/nws_county.db /nws_county.db
+COPY --from=builder /app/nws_zone.db /nws_zone.db
+
+# Add image metadata labels
+LABEL org.opencontainers.image.source="https://github.com/CS4366/SIREN"
+LABEL org.opencontainers.image.title="SIREN Geo Service"
+
+EXPOSE 6906
+
+CMD ["/docker-geo-service"]

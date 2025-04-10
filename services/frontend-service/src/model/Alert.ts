@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Position } from "geojson";
 
 export interface SirenAlert {
   identifier: string;
@@ -9,13 +8,7 @@ export interface SirenAlert {
   lastUpdatedTime: Date;
   history: AlertHistory[];
   areas: string[];
-  geometry: SirenGeometry;
   capInfo: any;
-}
-
-export interface SirenGeometry {
-  geometryType: "Polygon" | "MultiPolygon";
-  coordinates: Position[] | Position[][];
 }
 
 export interface AlertHistory {
@@ -24,11 +17,6 @@ export interface AlertHistory {
   vtecAction: number;
   appliesTo: string[];
   capId: string;
-}
-
-export interface AlertFeature {
-  data: Position[] | Position[][] | Position[][][];
-  type: "Polygon" | "MultiPolygon";
 }
 
 // I generated these from: https://www.weather.gov/help-map
