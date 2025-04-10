@@ -2,9 +2,10 @@ package SIREN
 
 import (
 	"fmt"
-	"math"
 
-	"github.com/ctessum/polyclip-go"
+	"github.com/engelsjk/polygol"
+	"github.com/paulmach/orb"
+	"github.com/paulmach/orb/simplify"
 )
 
 type UGC struct {
@@ -17,91 +18,54 @@ type UGC struct {
 	Feature any `msgpack:"feature"`
 }
 
-// Using an empty struct reduces memory usage.
-var states = map[string]struct{}{
-	"AL": {}, "AK": {}, "AZ": {}, "AR": {},
-	"CA": {}, "CO": {}, "CT": {}, "DE": {},
-	"FL": {}, "GA": {}, "HI": {}, "ID": {},
-	"IL": {}, "IN": {}, "IA": {}, "KS": {},
-	"KY": {}, "LA": {}, "ME": {}, "MD": {},
-	"MA": {}, "MI": {}, "MN": {}, "MS": {},
-	"MO": {}, "MT": {}, "NE": {}, "NV": {},
-	"NH": {}, "NJ": {}, "NM": {}, "NY": {},
-	"NC": {}, "ND": {}, "OH": {}, "OK": {},
-	"OR": {}, "PA": {}, "RI": {}, "SC": {},
-	"SD": {}, "TN": {}, "TX": {}, "UT": {},
-	"VT": {}, "VA": {}, "WA": {}, "WV": {},
-	"WI": {}, "WY": {},
-}
-
-func IsState(s string) bool {
-	if len(s) != 2 {
-		return false
-	}
-	_, ok := states[s]
-	return ok
-}
-
-type GeoJSONPolygon = [][2]float64
-type GeoJSONMultiPolygon = []GeoJSONPolygon
-
-// convertToPolygon converts a GeoJSON polygon to a polyclip.Polygon
-func convertPolygon(polygon GeoJSONPolygon) polyclip.Polygon {
-	contour := make([]polyclip.Point, len(polygon))
-	for i, pt := range polygon {
-		contour[i] = polyclip.Point{X: pt[0], Y: pt[1]}
-	}
-	return polyclip.Polygon{contour}.MakeValid()
-}
-
-// convertMultiPolygon converts a GeoJSON multipolygon to a polyclip.Polygon
-func convertMultiPolygon(multiPolygon GeoJSONMultiPolygon) polyclip.Polygon {
-	var poly polyclip.Polygon
-	for _, polygon := range multiPolygon {
-		contour := make([]polyclip.Point, len(polygon))
-		for i, pt := range polygon {
-			contour[i] = polyclip.Point{X: pt[0], Y: pt[1]}
-		}
-		poly = append(poly, contour)
-	}
-
-	return poly.MakeValid()
-}
+type AbstractGeom = polygol.Geom
 
 // UnionPolygons takes a slice of polygons and multipolygons and returns their union as a multipolygon.
-func UnionPolygons(polygons []GeoJSONPolygon, multipolygons []GeoJSONMultiPolygon, tol float64) GeoJSONMultiPolygon {
-	var union polyclip.Polygon
-	for _, polyCoordinates := range polygons {
-		poly := convertPolygon(polyCoordinates)
-		if len(union) == 0 {
-			union = poly
-		} else {
-			union = union.Construct(polyclip.UNION, poly)
+func UnionPolygons(geoms []AbstractGeom) AbstractGeom {
+	res, err := polygol.Union(geoms[0], geoms[1:]...)
+	if err != nil {
+		return nil
+	}
+	if len(res) == 0 {
+		return nil
+	}
+	return res
+}
+
+func SimplifyMultiPolygon(geom AbstractGeom, tolerance float64) AbstractGeom {
+	var mp orb.MultiPolygon
+	for _, polygon := range geom {
+		var poly orb.Polygon
+		for _, ring := range polygon {
+			var orbRing orb.Ring
+			for _, pt := range ring {
+				if len(pt) < 2 {
+					continue
+				}
+				orbRing = append(orbRing, orb.Point{pt[0], pt[1]})
+			}
+			poly = append(poly, orbRing)
 		}
+		mp = append(mp, poly)
 	}
 
-	for _, multiPolyCoordinates := range multipolygons {
-		multiPoly := convertMultiPolygon(multiPolyCoordinates)
-		if len(union) == 0 {
-			union = multiPoly
-		} else {
-			union = union.Construct(polyclip.UNION, multiPoly)
-		}
+	simplified := orb.Simplifier.MultiPolygon(simplify.VisvalingamThreshold(0.0005), mp)
+	if len(simplified) == 0 {
+		return nil
 	}
 
-	union = SimplifyPolygon(union, tol)
-
-	var result GeoJSONMultiPolygon
-	for _, polygon := range union {
-		var coords GeoJSONPolygon
-		for _, pt := range polygon {
-			coords = append(coords, [2]float64{pt.X, pt.Y})
+	var result AbstractGeom
+	for _, polygon := range simplified {
+		var polygonCoords [][][]float64
+		for _, ring := range polygon {
+			var ringCoords [][]float64
+			for _, pt := range ring {
+				// Each orb.Point is [2]float64, convert it to []float64.
+				ringCoords = append(ringCoords, []float64{pt[0], pt[1]})
+			}
+			polygonCoords = append(polygonCoords, ringCoords)
 		}
-		// Ensure the polygon is closed by appending the first point at the end
-		if len(coords) > 0 {
-			coords = append(coords, coords[0])
-		}
-		result = append(result, coords)
+		result = append(result, polygonCoords)
 	}
 
 	return result
@@ -110,7 +74,7 @@ func UnionPolygons(polygons []GeoJSONPolygon, multipolygons []GeoJSONMultiPolygo
 // ConvertToPolygon attempts to convert an interface{} into a simple polygon,
 // which is defined as a slice of [2]float64.
 func ConvertToPolygon(feature any) ([][2]float64, error) {
-	arr, ok := feature.([]interface{})
+	arr, ok := feature.([]any)
 	if !ok {
 		return nil, fmt.Errorf("expected []interface{} for polygon")
 	}
@@ -153,55 +117,4 @@ func ConvertToMultiPolygon(feature any) ([][][2]float64, error) {
 		multiPolygon = append(multiPolygon, polygon)
 	}
 	return multiPolygon, nil
-}
-
-/*================== Douglas–Peucker algorithm implementation =================*/
-
-func perpDistance(p, start, end polyclip.Point) float64 {
-	dx := end.X - start.X
-	dy := end.Y - start.Y
-	if dx == 0 && dy == 0 {
-		return math.Hypot(p.X-start.X, p.Y-start.Y)
-	}
-
-	t := ((p.X-start.X)*dx + (p.Y-start.Y)*dy) / (dx*dx + dy*dy)
-
-	closeX := start.X + t*dx
-	closeY := start.Y + t*dy
-	return math.Hypot(p.X-closeX, p.Y-closeY)
-}
-
-func simplify(points []polyclip.Point, tolerance float64) []polyclip.Point {
-	if len(points) < 3 {
-		return points
-	}
-
-	maxDist := 0.0
-	index := 0
-
-	for i := 1; i < len(points)-1; i++ {
-		dist := perpDistance(points[i], points[0], points[len(points)-1])
-		if dist > maxDist {
-			index = i
-			maxDist = dist
-		}
-	}
-
-	if maxDist > tolerance {
-		//Scary recursive call
-		left := simplify(points[:index+1], tolerance)
-		right := simplify(points[index:], tolerance)
-
-		return append(left[:len(left)-1], right...)
-	}
-
-	return []polyclip.Point{points[0], points[len(points)-1]}
-}
-
-func SimplifyPolygon(polygon polyclip.Polygon, tolerance float64) polyclip.Polygon {
-	simplified := make(polyclip.Polygon, len(polygon))
-	for i, contour := range polygon {
-		simplified[i] = simplify(contour, tolerance)
-	}
-	return simplified
 }
