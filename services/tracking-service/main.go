@@ -28,7 +28,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/vmihailenco/msgpack"
-	"go.etcd.io/bbolt"
 )
 
 /**============================================
@@ -118,67 +117,6 @@ func ConnectToMongo() {
 }
 
 /**============================================
- *               BBolt Connection
- *=============================================**/
-
-var CountyStore *bbolt.DB
-var ZoneStore *bbolt.DB
-
-func ConnectToUGCStore() {
-	var err error
-	CountyStore, err = bbolt.Open("nws_county.db", 0644, nil)
-	if err != nil {
-		log.Fatal("Failed to open NWS County BBolt datastore")
-	}
-	ZoneStore, err = bbolt.Open("nws_zone.db", 0644, nil)
-	if err != nil {
-		log.Fatal("Failed to open NWS Zone BBolt datastore")
-	}
-}
-
-func getUGC(ugc string) (SIREN.UGC, error) {
-	var ugcData SIREN.UGC
-	// Determine which store to use based on the UGC type
-	log.Debug("Fetching UGC data", "ugc", ugc, "type", ugc[2])
-	if ugc[2] == 'C' {
-		log.Debug("County UGC found, using CountyStore")
-		err := CountyStore.View(func(tx *bbolt.Tx) error {
-			b := tx.Bucket([]byte("Data"))
-			if b == nil {
-				return fmt.Errorf("bucket not found")
-			}
-			v := b.Get([]byte(ugc))
-			if v == nil {
-				return fmt.Errorf("key not found")
-			}
-			return msgpack.Unmarshal(v, &ugcData)
-		})
-		if err != nil {
-			log.Error("Failed to fetch UGC data", "err", err)
-			return SIREN.UGC{}, err
-		}
-	} else {
-		// This is a marine zone
-		err := ZoneStore.View(func(tx *bbolt.Tx) error {
-			b := tx.Bucket([]byte("Data"))
-			if b == nil {
-				return fmt.Errorf("bucket not found")
-			}
-			v := b.Get([]byte(ugc))
-			if v == nil {
-				return fmt.Errorf("key not found")
-			}
-			return msgpack.Unmarshal(v, &ugcData)
-		})
-		if err != nil {
-			return SIREN.UGC{}, err
-		}
-	}
-
-	return ugcData, nil
-}
-
-/**============================================
  *            Concurrency Control
  *=============================================**/
 
@@ -208,7 +146,7 @@ func cleanupAlertLocker(expiration time.Duration) {
 	defer timer.Stop()
 
 	for range timer.C {
-		alertLocker.Range(func(key, value interface{}) bool {
+		alertLocker.Range(func(key, value any) bool {
 			alertLock := value.(*AlertLock)
 			if time.Since(alertLock.lastUsed) > expiration {
 				alertLocker.Delete(key)
@@ -259,14 +197,8 @@ func main() {
 		}
 	}()
 
-	ConnectToUGCStore()
-	defer CountyStore.Close()
-	defer ZoneStore.Close()
-
 	log.Print("Connected to message queue and MongoDB")
 	log.Print("Starting connection to NWWS ingress server...")
-
-	go createGeometryForActives()
 
 	//Consume messages from the tracking queue
 	msgs, err := ch.Consume(trackingQueue.Name, "", true, false, false, false, nil)
@@ -309,129 +241,6 @@ func main() {
 /**============================================
  *           Alert Processing Logic
  *=============================================**/
-
-func calculateGeometry(areas []string) (SIREN.SirenAlertGeometry, error) {
-	var geometry SIREN.SirenAlertGeometry
-	var ugcs []SIREN.UGC
-
-	for _, area := range areas {
-		ugc, err := getUGC(area)
-		if err != nil {
-			// Maybe change this so failing is a bigger deal
-			continue
-		}
-		ugcs = append(ugcs, ugc)
-	}
-
-	// Merge all the polygons into a single polygon
-	if len(ugcs) == 0 {
-		return geometry, fmt.Errorf("no UGC found for %v", areas)
-	}
-
-	var abstractGeoms []SIREN.AbstractGeom
-
-	for _, ugc := range ugcs {
-		// First, try converting to a multipolygon (assumed to be [][][2]float64).
-		if mp, err := SIREN.ConvertToMultiPolygon(ugc.Feature); err == nil {
-			// Convert each ring in the multipolygon.
-			polygonRings := make([][][]float64, 0, len(mp))
-			for _, ring := range mp {
-				convRing := make([][]float64, len(ring))
-				for j, pt := range ring {
-					convRing[j] = []float64{pt[0], pt[1]}
-				}
-				polygonRings = append(polygonRings, convRing)
-			}
-			// Wrap the converted polygon rings:
-			// A multipolygon abstract geometry is represented as a slice of polygons.
-			// Here we wrap polygonRings (of type [][][]float64) inside an extra slice.
-			abstractGeom := [][][][]float64{polygonRings}
-			abstractGeoms = append(abstractGeoms, abstractGeom)
-			continue
-		}
-
-		// If multipolygon conversion fails, try converting as a simple polygon (assumed type: [][2]float64).
-		if poly, err := SIREN.ConvertToPolygon(ugc.Feature); err == nil {
-			convRing := make([][]float64, len(poly))
-			for j, pt := range poly {
-				convRing[j] = []float64{pt[0], pt[1]}
-			}
-			// A simple polygon is a single ring; first wrap it as a polygon (slice of rings),
-			// then as a multipolygon (slice of polygons).
-			abstractGeom := [][][][]float64{{convRing}}
-			abstractGeoms = append(abstractGeoms, abstractGeom)
-		}
-	}
-
-	// If we have no valid polygons, return an empty geometry
-	if len(abstractGeoms) == 0 {
-		return geometry, fmt.Errorf("no valid polygons found for %v", areas)
-	}
-
-	// Merge all the polygons into a single multipolygon
-	mergedPolygon := SIREN.UnionPolygons(abstractGeoms)
-	if mergedPolygon == nil {
-		return geometry, fmt.Errorf("failed to merge polygons for %v", areas)
-	}
-
-	geometry.GeometryType = "MultiPolygon"
-	geometry.Coordinates = SIREN.SimplifyMultiPolygon(mergedPolygon, 0.1)[0]
-	return geometry, nil
-}
-
-func createGeometryForActives() {
-	log.Debug("Calculating geometry for active alerts...")
-	cursor, err := stateCollection.Aggregate(context.TODO(), bson.A{
-		bson.M{"$match": bson.M{"state": "Active", "geometry": bson.M{"$exists": false}}},
-		bson.M{
-			"$lookup": bson.M{
-				"from":         "alerts",
-				"localField":   "mostRecentCAP",
-				"foreignField": "identifier",
-				"as":           "capInfo",
-			},
-		},
-		bson.M{"$unwind": "$capInfo"},
-		// Match only active alerts that are not expired and do not have a polygon
-		bson.M{"$match": bson.M{"capInfo.info.expires": bson.M{"$gt": time.Now()}, "capInfo.info.area.polygon": nil}},
-		bson.M{"$unset": "capInfo"},
-	})
-	if err != nil {
-		log.Error("Failed to aggregate active alerts", "err", err)
-		return
-	}
-	defer cursor.Close(context.TODO())
-
-	log.Debug("Calculating geometry for active alerts...")
-
-	// Iterate over the results and calculate geometry for each active alert
-	for cursor.Next(context.TODO()) {
-		// If the alert doesn't have a Geometry, calculate it
-		var alert SIREN.SirenAlert
-		if err := cursor.Decode(&alert); err != nil {
-			log.Error("Failed to decode alert", "err", err)
-			continue
-		}
-		if alert.Geometry.GeometryType == "" || alert.Geometry.Coordinates == nil {
-			geometry, err := calculateGeometry(alert.Areas)
-			if err != nil {
-				log.Error("Failed to calculate geometry for alert", "err", err)
-				continue
-			}
-			alert.Geometry = geometry
-
-			// Update the alert in the database
-			_, err = stateCollection.UpdateOne(context.TODO(), bson.M{"identifier": alert.Identifier}, bson.M{"$set": bson.M{"geometry": alert.Geometry}})
-			if err != nil {
-				log.Error("Failed to update alert with geometry", "err", err)
-				continue
-			}
-		}
-	}
-
-	log.Info("Geometry calculation for active alerts completed.")
-
-}
 
 // Recursively finds all the references from a given reference.
 func findReference(ctx context.Context, reference NWS.Reference, sirenId string, visited map[string]bool) []SIREN.MiniCAP {
@@ -676,24 +485,6 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 			Areas:         alert.Info.Area.Geocodes.UGC,
 		}
 
-		if alert.Info.Area.Polygon == nil {
-			log.Debug("No polygon found in the alert, attempting to calculate geometry from UGC", "id", sirenID, "worker", workerId)
-			geometry, err := calculateGeometry(alert.Info.Area.Geocodes.UGC)
-			if err != nil {
-				log.Error("Failed to calculate geometry for the alert", "id", sirenID, "worker", workerId, "err", err)
-				return
-			}
-			// Set the geometry for the alert
-			newAlert.Geometry = geometry
-		} else {
-			if len(alert.Info.Area.Polygon.Coordinates) > 0 {
-				newAlert.Geometry = SIREN.SirenAlertGeometry{
-					GeometryType: "Polygon",
-					Coordinates:  alert.Info.Area.Polygon.Coordinates[0],
-				}
-			}
-		}
-
 		_, err := stateCollection.InsertOne(context.TODO(), newAlert)
 		if err != nil {
 			log.Error("Failed to insert the alert into the database", "id", sirenID, "worker", workerId, "err", err)
@@ -731,25 +522,6 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 
 	//We'll process the history here.
 	handleAlertHistory(&existingAlert, alert, vtec, workerId)
-
-	//Calculate the geometry for the alert
-	if alert.Info.Area.Polygon == nil && existingAlert.State == "Active" {
-		log.Debug("No polygon found in the alert, attempting to calculate geometry from UGC", "id", sirenID, "worker", workerId)
-		geometry, err := calculateGeometry(alert.Info.Area.Geocodes.UGC)
-		if err != nil {
-			log.Error("Failed to calculate geometry for the alert", "id", sirenID, "worker", workerId, "err", err)
-		} else {
-			// Set the geometry for the alert
-			existingAlert.Geometry = geometry
-		}
-	} else if alert.Info.Area.Polygon != nil && existingAlert.State == "Active" {
-		if len(alert.Info.Area.Polygon.Coordinates) > 0 {
-			existingAlert.Geometry = SIREN.SirenAlertGeometry{
-				GeometryType: "Polygon",
-				Coordinates:  alert.Info.Area.Polygon.Coordinates[0],
-			}
-		}
-	}
 
 	//Update the most recent sent time and CAP ID
 	existingAlert.MostRecentSentTime = alert.Sent

@@ -22,12 +22,6 @@ type SirenAlert struct {
 	UpgradedTo         string              `bson:"upgradedTo,omitempty"`
 	History            []SirenAlertHistory `bson:"history"`
 	Areas              []string            `bson:"areas"`
-	Geometry           SirenAlertGeometry  `bson:"geometry,omitempty"`
-}
-
-type SirenAlertGeometry struct {
-	GeometryType string `bson:"geometryType"` // Should be "Polygon" or "MultiPolygon"
-	Coordinates  any    `bson:"coordinates"`  // Can hold either [][][2]float64 for Polygon or [][][][2]float64 for MultiPolygon
 }
 
 type MiniCAP struct {
