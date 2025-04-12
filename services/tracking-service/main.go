@@ -209,6 +209,9 @@ func main() {
 	// Start a goroutine to cleanup the alert locker every 5 minutes
 	go cleanupAlertLocker(5 * time.Minute)
 
+	// Start a goroutine to cleaup the alert collection every 5 minutes
+	go deleteExpiredAlerts(5 * time.Minute)
+
 	// Start a worker pool of 10 goroutines to handle messages
 	for i := 0; i < 10; i++ {
 		go func(workerID int) {
@@ -525,6 +528,8 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 	//Update the most recent sent time and CAP ID
 	existingAlert.MostRecentSentTime = alert.Sent
 	existingAlert.MostRecentCAP = alert.Identifier
+	// Update the expires to most recent expires 
+	existingAlert.Expires = alert.Info.Expires
 
 	//Upsert the alert in the database
 	_, err = stateCollection.UpdateOne(
@@ -567,26 +572,22 @@ func storeCap(alert NWS.Alert, shortId string, workerId int) {
 
 // Deletes any expired alerts 
 // Is called when alerts come in, so it only clears alerts when alerts come into the db
-func deleteExpiredAlerts() {
+func deleteExpiredAlerts(expiration time.Duration) {
+	timer := time.NewTicker(expiration)
+	defer timer.Stop()
+
+	for range timer.C {
 	var capIdsDelete []string
-	// Find oldest 25 state alerts
-	findOptions := options.Find().SetSort(bson.M{"lastUpdatedTime": 1}).SetLimit(25)
-	findOptions.SetProjection(bson.M {
-		"identifier": 1,
-		"expires": 1,
-		"history.capID": 1,
-		"lastUpdatedTime": 1,
-	})
-	// Points at first document
-	cursor, err := stateCollection.Find(context.TODO(), bson.M{}, findOptions)
+	// Points at first state document
+	cursor, err := stateCollection.Find(context.TODO(), bson.M{})
 	if err != nil {
 		log.Error("Error during Find: ", err)
 		return
 	}
 	defer cursor.Close(context.TODO())
-	// Go through oldest 25 state documents
+	// Go through expired state documents
 	for cursor.Next(context.TODO()) {
-		var alert SIREN.AlertSummary
+		var alert SIREN.SirenAlert
 		if err := cursor.Decode(&alert); err != nil {
 			log.Error(err)
 		}
@@ -596,12 +597,20 @@ func deleteExpiredAlerts() {
 			for _, h := range alert.History {
 				capIdsDelete = append(capIdsDelete, h.CapID)
 			}
-			// Delete that state since it is expired 
-			deleteResult, err := stateCollection.DeleteOne(context.TODO(), bson.M{"identifier": alert.Identifier})
-			if err != nil {
-				log.Error(err)
-			}
-			log.Debug("Deleted states", "count", deleteResult.DeletedCount)
+			// Update alert state to inactive
+			alert.State = "Inactive"
+			//Upsert the alert in the database
+	_, err = stateCollection.UpdateOne(
+		context.TODO(),
+		bson.M{"identifier": alert.Identifier},
+		bson.M{"$set": alert},
+		options.UpdateOne().SetUpsert(true),
+	)
+	if err != nil {
+		log.Error("Failed to upsert the alert in the database", "id", alert.Identifier, "err", err)
+		return
+	}
+	log.Debug("Alert was upserted to the database", "state", alert.State, "id", alert.Identifier, )
 		}
 	}
 	// Delete all alerts with matching capIDs (identifier field in alerts collection)
@@ -612,6 +621,7 @@ func deleteExpiredAlerts() {
 		}
 		log.Debug("Deleted alerts", "count", deleteResult.DeletedCount)	
 	} else { log.Info("No alerts to delete.") }
+	}
 }
 
 // Handles parsing the alert JSON and processing it.
@@ -642,9 +652,6 @@ func handleAlertMessage(msg string, workerId int) {
 
 	// Save the CAP alert to the database
 	storeCap(alert, shortId, workerId)
-
-	// Delete any expired alerts
-	deleteExpiredAlerts()
 
 	//TODO: Publish the alert to the live queue
 
