@@ -591,6 +591,14 @@ func deleteExpiredAlerts(expiration time.Duration) {
 		if err := cursor.Decode(&alert); err != nil {
 			log.Error(err)
 		}
+
+		// Mutex lock
+		alertLock := getLock(alert.Identifier)
+		log.Debug("Attempting to aquire mutex lock", "id", alert.Identifier)
+		// Block until the lock becomes available and then acquire it
+		alertLock.mu.Lock()
+		log.Debug("Worker has now acquired lock on alert", "id", alert.Identifier)
+
 		// Checks if alert is expired then adds alert.history.capID to string arry
 		if alert.Expires.Before(time.Now()) {
 			// For loop since history is array 
