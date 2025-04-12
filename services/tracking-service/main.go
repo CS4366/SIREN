@@ -600,17 +600,16 @@ func deleteExpiredAlerts(expiration time.Duration) {
 			// Update alert state to inactive
 			alert.State = "Inactive"
 			//Upsert the alert in the database
-	_, err = stateCollection.UpdateOne(
-		context.TODO(),
-		bson.M{"identifier": alert.Identifier},
-		bson.M{"$set": alert},
-		options.UpdateOne().SetUpsert(true),
-	)
-	if err != nil {
-		log.Error("Failed to upsert the alert in the database", "id", alert.Identifier, "err", err)
-		return
-	}
-	log.Debug("Alert was upserted to the database", "state", alert.State, "id", alert.Identifier, )
+			_, err = stateCollection.UpdateOne(
+				context.TODO(),
+				bson.M{"identifier": alert.Identifier},
+				bson.M{"$set": alert},
+				options.UpdateOne().SetUpsert(true),
+			)
+			if err != nil {
+				log.Error("Failed to upsert the alert in the database", "id", alert.Identifier, "err", err)
+			}
+			log.Debug("Alert was upserted to the database", "state", alert.State, "id", alert.Identifier, )
 		}
 	}
 	// Delete all alerts with matching capIDs (identifier field in alerts collection)
