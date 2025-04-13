@@ -17,6 +17,7 @@ type SirenAlert struct {
 	Identifier         string              `bson:"identifier"`
 	MostRecentCAP      string              `bson:"mostRecentCAP,omitempty"`
 	State              string              `bson:"state"`
+	Expires			   time.Time 		   `bson:"expires"`
 	MostRecentSentTime time.Time           `bson:"mostRecentSentTime"`
 	LastUpdatedTime    time.Time           `bson:"lastUpdatedTime"`
 	UpgradedTo         string              `bson:"upgradedTo,omitempty"`
@@ -36,4 +37,13 @@ type MiniCAP struct {
 type Rectification struct {
 	History []SirenAlertHistory
 	Areas   []string
+}
+
+type AlertSummary struct {
+	Identifier         string              `bson:"identifier"`
+	Expires time.Time `bson:"expires"`
+	History []struct {
+		CapID string `bson:"capID"`
+	} `bson:"history"`
+	LastUpdatedTime    time.Time           `bson:"lastUpdatedTime"`
 }

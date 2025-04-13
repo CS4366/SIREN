@@ -209,6 +209,9 @@ func main() {
 	// Start a goroutine to cleanup the alert locker every 5 minutes
 	go cleanupAlertLocker(5 * time.Minute)
 
+	// Start a goroutine to cleaup the alert collection every 5 minutes
+	go deleteExpiredAlerts(5 * time.Minute)
+
 	// Start a worker pool of 10 goroutines to handle messages
 	for i := 0; i < 10; i++ {
 		go func(workerID int) {
@@ -467,6 +470,7 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 		_, err := stateCollection.InsertOne(context.TODO(), SIREN.SirenAlert{
 			Identifier:         sirenID,
 			State:              "Active",
+			Expires: 			alert.Info.Expires,
 			MostRecentSentTime: time.Now(),
 			LastUpdatedTime:    time.Now(),
 			UpgradedTo:         "",
@@ -500,6 +504,7 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 			existingAlert = SIREN.SirenAlert{
 				Identifier:         sirenID,
 				State:              "Active",
+				Expires: 			alert.Info.Expires,
 				MostRecentSentTime: time.Now(),
 				LastUpdatedTime:    time.Now(),
 				UpgradedTo:         "",
@@ -523,6 +528,8 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 	//Update the most recent sent time and CAP ID
 	existingAlert.MostRecentSentTime = alert.Sent
 	existingAlert.MostRecentCAP = alert.Identifier
+	// Update the expires to most recent expires 
+	existingAlert.Expires = alert.Info.Expires
 
 	//Upsert the alert in the database
 	_, err = stateCollection.UpdateOne(
@@ -537,6 +544,96 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 	}
 	log.Debug("Alert was upserted to the database", "state", existingAlert.State, "id", sirenID, "worker", workerId)
 
+}
+
+// Handles alerts without VTEC codes
+func handleSpecialAlert(alert NWS.Alert, workerId int) {
+    // Generate a unique ID for this special alert
+    specialID := SIREN.GenerateSpecialAlertID(alert)
+    
+    // Get a lock for this alert
+    alertLock := getLock(specialID)
+    alertLock.mu.Lock()
+    defer alertLock.mu.Unlock()
+    
+    log.Debug("Processing special alert (no VTEC)", "id", specialID, "worker", workerId)
+    
+    // Check if this alert already exists in the database
+    var existingAlert SIREN.SirenAlert
+    err := stateCollection.FindOne(context.TODO(), bson.M{"identifier": specialID}).Decode(&existingAlert)
+    
+    if err != nil {
+        if err == mongo.ErrNoDocuments {
+            // Create a new alert
+            newAlert := SIREN.SirenAlert{
+                Identifier:         specialID,
+                State:              "Active", // Default state
+                Expires:            alert.Info.Expires,
+                MostRecentSentTime: alert.Sent,
+                LastUpdatedTime:    time.Now(),
+                History: []SIREN.SirenAlertHistory{
+                    {
+                        RecievedAt:            time.Now(),
+                        VtecActionDescription: "Issued", // No VTEC action, use generic term
+                        VtecAction:            NWS.VTEC_NEW, // Use NEW as the most logical default
+                        AppliesTo:             alert.Info.Area.Geocodes.UGC,
+                        CapID:                 alert.Identifier,
+                    },
+                },
+                MostRecentCAP: alert.Identifier,
+                Areas:         alert.Info.Area.Geocodes.UGC,
+            }
+            
+            // Insert the new alert
+            _, err = stateCollection.InsertOne(context.TODO(), newAlert)
+            if err != nil {
+                log.Error("Failed to insert special alert", "id", specialID, "worker", workerId, "err", err)
+                return
+            }
+            log.Debug("Special alert inserted", "id", specialID, "worker", workerId)
+            
+        } else {
+            log.Error("Error querying database for special alert", "id", specialID, "worker", workerId, "err", err)
+            return
+        }
+    } else {
+        // Update existing alert
+        existingAlert.MostRecentSentTime = alert.Sent
+        existingAlert.LastUpdatedTime = time.Now()
+        existingAlert.MostRecentCAP = alert.Identifier
+        existingAlert.Expires = alert.Info.Expires
+        
+        // Add a new history entry
+        historyEntry := SIREN.SirenAlertHistory{
+            RecievedAt:            time.Now(),
+            VtecActionDescription: "Updated", // Generic term for updates
+            VtecAction:            NWS.VTEC_CON, // CON (continued) is a reasonable default for updates
+            AppliesTo:             alert.Info.Area.Geocodes.UGC,
+            CapID:                 alert.Identifier,
+        }
+        
+        existingAlert.History = append([]SIREN.SirenAlertHistory{historyEntry}, existingAlert.History...)
+        
+        // Update areas if needed
+        for _, area := range alert.Info.Area.Geocodes.UGC {
+            if !slices.Contains(existingAlert.Areas, area) {
+                existingAlert.Areas = append(existingAlert.Areas, area)
+            }
+        }
+        
+        // Update the alert in the database
+        _, err = stateCollection.UpdateOne(
+            context.TODO(),
+            bson.M{"identifier": specialID},
+            bson.M{"$set": existingAlert},
+        )
+        
+        if err != nil {
+            log.Error("Failed to update special alert", "id", specialID, "worker", workerId, "err", err)
+            return
+        }
+        log.Debug("Special alert updated", "id", specialID, "worker", workerId)
+    }
 }
 
 // Stores the CAP alert in the database
@@ -560,6 +657,67 @@ func storeCap(alert NWS.Alert, shortId string, workerId int) {
 	} else {
 		log.Warn("Alert already exists in the database", "id", shortId, "worker", workerId)
 		return
+	}
+}
+
+// Deletes any expired alerts 
+// Is called when alerts come in, so it only clears alerts when alerts come into the db
+func deleteExpiredAlerts(expiration time.Duration) {
+	timer := time.NewTicker(expiration)
+	defer timer.Stop()
+
+	for range timer.C {
+	var capIdsDelete []string
+	// Points at first state document
+	cursor, err := stateCollection.Find(context.TODO(), bson.M{})
+	if err != nil {
+		log.Error("Error during Find: ", err)
+		return
+	}
+	defer cursor.Close(context.TODO())
+	// Go through expired state documents
+	for cursor.Next(context.TODO()) {
+		var alert SIREN.SirenAlert
+		if err := cursor.Decode(&alert); err != nil {
+			log.Error(err)
+		}
+
+		// Mutex lock
+		alertLock := getLock(alert.Identifier)
+		log.Debug("Attempting to aquire mutex lock", "id", alert.Identifier)
+		// Block until the lock becomes available and then acquire it
+		alertLock.mu.Lock()
+		log.Debug("Worker has now acquired lock on alert", "id", alert.Identifier)
+
+		// Checks if alert is expired then adds alert.history.capID to string arry
+		if alert.Expires.Before(time.Now()) {
+			// For loop since history is array 
+			for _, h := range alert.History {
+				capIdsDelete = append(capIdsDelete, h.CapID)
+			}
+			// Update alert state to inactive
+			alert.State = "Inactive"
+			//Upsert the alert in the database
+			_, err = stateCollection.UpdateOne(
+				context.TODO(),
+				bson.M{"identifier": alert.Identifier},
+				bson.M{"$set": alert},
+				options.UpdateOne().SetUpsert(true),
+			)
+			if err != nil {
+				log.Error("Failed to upsert the alert in the database", "id", alert.Identifier, "err", err)
+			}
+			log.Debug("Alert was upserted to the database", "state", alert.State, "id", alert.Identifier, )
+		}
+	}
+	// Delete all alerts with matching capIDs (identifier field in alerts collection)
+	if len(capIdsDelete) > 0 {
+		deleteResult, err := alertsCollection.DeleteMany(context.TODO(), bson.M { "identifier": bson.M{"$in": capIdsDelete},})
+		if err != nil {
+			log.Error("2", err)
+		}
+		log.Debug("Deleted alerts", "count", deleteResult.DeletedCount)	
+	} else { log.Info("No alerts to delete.") }
 	}
 }
 
@@ -587,6 +745,8 @@ func handleAlertMessage(msg string, workerId int) {
 	if vtec != nil {
 		// It's sort of hidden, but this is where the alert is actually processed
 		handleAlert(alert, vtec, workerId)
+	} else {
+		handleSpecialAlert(alert, workerId)
 	}
 
 	// Save the CAP alert to the database
