@@ -546,6 +546,96 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 
 }
 
+// Handles alerts without VTEC codes
+func handleSpecialAlert(alert NWS.Alert, workerId int) {
+    // Generate a unique ID for this special alert
+    specialID := SIREN.GenerateSpecialAlertID(alert)
+    
+    // Get a lock for this alert
+    alertLock := getLock(specialID)
+    alertLock.mu.Lock()
+    defer alertLock.mu.Unlock()
+    
+    log.Debug("Processing special alert (no VTEC)", "id", specialID, "worker", workerId)
+    
+    // Check if this alert already exists in the database
+    var existingAlert SIREN.SirenAlert
+    err := stateCollection.FindOne(context.TODO(), bson.M{"identifier": specialID}).Decode(&existingAlert)
+    
+    if err != nil {
+        if err == mongo.ErrNoDocuments {
+            // Create a new alert
+            newAlert := SIREN.SirenAlert{
+                Identifier:         specialID,
+                State:              "Active", // Default state
+                Expires:            alert.Info.Expires,
+                MostRecentSentTime: alert.Sent,
+                LastUpdatedTime:    time.Now(),
+                History: []SIREN.SirenAlertHistory{
+                    {
+                        RecievedAt:            time.Now(),
+                        VtecActionDescription: "Issued", // No VTEC action, use generic term
+                        VtecAction:            NWS.VTEC_NEW, // Use NEW as the most logical default
+                        AppliesTo:             alert.Info.Area.Geocodes.UGC,
+                        CapID:                 alert.Identifier,
+                    },
+                },
+                MostRecentCAP: alert.Identifier,
+                Areas:         alert.Info.Area.Geocodes.UGC,
+            }
+            
+            // Insert the new alert
+            _, err = stateCollection.InsertOne(context.TODO(), newAlert)
+            if err != nil {
+                log.Error("Failed to insert special alert", "id", specialID, "worker", workerId, "err", err)
+                return
+            }
+            log.Debug("Special alert inserted", "id", specialID, "worker", workerId)
+            
+        } else {
+            log.Error("Error querying database for special alert", "id", specialID, "worker", workerId, "err", err)
+            return
+        }
+    } else {
+        // Update existing alert
+        existingAlert.MostRecentSentTime = alert.Sent
+        existingAlert.LastUpdatedTime = time.Now()
+        existingAlert.MostRecentCAP = alert.Identifier
+        existingAlert.Expires = alert.Info.Expires
+        
+        // Add a new history entry
+        historyEntry := SIREN.SirenAlertHistory{
+            RecievedAt:            time.Now(),
+            VtecActionDescription: "Updated", // Generic term for updates
+            VtecAction:            NWS.VTEC_CON, // CON (continued) is a reasonable default for updates
+            AppliesTo:             alert.Info.Area.Geocodes.UGC,
+            CapID:                 alert.Identifier,
+        }
+        
+        existingAlert.History = append([]SIREN.SirenAlertHistory{historyEntry}, existingAlert.History...)
+        
+        // Update areas if needed
+        for _, area := range alert.Info.Area.Geocodes.UGC {
+            if !slices.Contains(existingAlert.Areas, area) {
+                existingAlert.Areas = append(existingAlert.Areas, area)
+            }
+        }
+        
+        // Update the alert in the database
+        _, err = stateCollection.UpdateOne(
+            context.TODO(),
+            bson.M{"identifier": specialID},
+            bson.M{"$set": existingAlert},
+        )
+        
+        if err != nil {
+            log.Error("Failed to update special alert", "id", specialID, "worker", workerId, "err", err)
+            return
+        }
+        log.Debug("Special alert updated", "id", specialID, "worker", workerId)
+    }
+}
+
 // Stores the CAP alert in the database
 func storeCap(alert NWS.Alert, shortId string, workerId int) {
 	var existingAlert NWS.Alert
@@ -655,6 +745,8 @@ func handleAlertMessage(msg string, workerId int) {
 	if vtec != nil {
 		// It's sort of hidden, but this is where the alert is actually processed
 		handleAlert(alert, vtec, workerId)
+	} else {
+		handleSpecialAlert(alert, workerId)
 	}
 
 	// Save the CAP alert to the database
