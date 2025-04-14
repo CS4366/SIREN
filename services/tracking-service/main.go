@@ -665,61 +665,51 @@ func storeCap(alert NWS.Alert, shortId string, workerId int) {
 func deleteExpiredAlerts(expiration time.Duration) {
 	timer := time.NewTicker(expiration)
 	defer timer.Stop()
-
-	for range timer.C {
-	var capIdsDelete []string
-	// Points at first state document
-	cursor, err := stateCollection.Find(context.TODO(), bson.M{})
-	if err != nil {
-		log.Error("Error during Find: ", err)
-		return
-	}
-	defer cursor.Close(context.TODO())
-	// Go through expired state documents
-	for cursor.Next(context.TODO()) {
-		var alert SIREN.SirenAlert
-		if err := cursor.Decode(&alert); err != nil {
-			log.Error(err)
-		}
-
-		// Mutex lock
-		alertLock := getLock(alert.Identifier)
-		log.Debug("Attempting to aquire mutex lock", "id", alert.Identifier)
-		// Block until the lock becomes available and then acquire it
-		alertLock.mu.Lock()
-		log.Debug("Worker has now acquired lock on alert", "id", alert.Identifier)
-
-		// Checks if alert is expired then adds alert.history.capID to string arry
-		if alert.Expires.Before(time.Now()) {
-			// For loop since history is array 
-			for _, h := range alert.History {
-				capIdsDelete = append(capIdsDelete, h.CapID)
-			}
-			// Update alert state to inactive
-			alert.State = "Inactive"
-			//Upsert the alert in the database
-			_, err = stateCollection.UpdateOne(
-				context.TODO(),
-				bson.M{"identifier": alert.Identifier},
-				bson.M{"$set": alert},
-				options.UpdateOne().SetUpsert(true),
-			)
-			if err != nil {
-				log.Error("Failed to upsert the alert in the database", "id", alert.Identifier, "err", err)
-			}
-			log.Debug("Alert was upserted to the database", "state", alert.State, "id", alert.Identifier, )
-		}
-	}
-	// Delete all alerts with matching capIDs (identifier field in alerts collection)
-	if len(capIdsDelete) > 0 {
-		deleteResult, err := alertsCollection.DeleteMany(context.TODO(), bson.M { "identifier": bson.M{"$in": capIdsDelete},})
+		for range timer.C {
+		// Points at first state document
+		cursor, err := stateCollection.Find(context.TODO(), bson.M{})
 		if err != nil {
-			log.Error("2", err)
+			log.Error("Error during Find: ", err)
+			return
 		}
-		log.Debug("Deleted alerts", "count", deleteResult.DeletedCount)	
-	} else { log.Info("No alerts to delete.") }
+		defer cursor.Close(context.TODO())
+		// Go through expired state documents
+		for cursor.Next(context.TODO()) {
+			var alert SIREN.SirenAlert
+			if err := cursor.Decode(&alert); err != nil { log.Error(err) }
+
+			// Mutex lock
+			alertLock := getLock(alert.Identifier)
+			log.Debug("Attempting to aquire mutex lock in Delete", "id", alert.Identifier)
+			// Block until the lock becomes available and then acquire it
+			alertLock.mu.Lock()
+			log.Debug("Worker has now acquired lock on alert", "id", alert.Identifier)
+			defer alertLock.mu.Unlock()
+
+			// Checks if alert is expired then adds alert.history.capID to string arry
+			if alert.Expires.Before(time.Now()) {
+				// For loop since history is array 
+				for _, h := range alert.History {
+					deleteResult, err := alertsCollection.DeleteOne(context.TODO(), bson.M {"identifier": h.CapID})
+					if err != nil { log.Error("Delete result alerts collection: ", err) }
+					if deleteResult != nil { log.Debug("Deleted alerts", "count", deleteResult.DeletedCount)	
+					} else { log.Info("No alerts to delete.") }
+				}
+				// Update alert state to inactive
+				alert.State = "Inactive"
+				//Upsert the alert in the database
+				_, err = stateCollection.UpdateOne(
+					context.TODO(),
+					bson.M{"identifier": alert.Identifier},
+					bson.M{"$set": alert},
+					options.UpdateOne().SetUpsert(true),
+				)
+				if err != nil { log.Error("Failed to upsert the alert in the database", "id", alert.Identifier, "err", err) }
+				log.Debug("Alert was upserted to the database", "state", alert.State, "id", alert.Identifier, )
+			}
+		}
 	}
-}
+}	
 
 // Handles parsing the alert JSON and processing it.
 // This is the main entry point for the alert processing logic.
