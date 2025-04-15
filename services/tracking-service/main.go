@@ -7,7 +7,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -27,6 +26,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/vmihailenco/msgpack"
 )
 
 /**============================================
@@ -145,7 +146,7 @@ func cleanupAlertLocker(expiration time.Duration) {
 	defer timer.Stop()
 
 	for range timer.C {
-		alertLocker.Range(func(key, value interface{}) bool {
+		alertLocker.Range(func(key, value any) bool {
 			alertLock := value.(*AlertLock)
 			if time.Since(alertLock.lastUsed) > expiration {
 				alertLocker.Delete(key)
@@ -183,7 +184,7 @@ func main() {
 	}
 
 	log.Print("Starting tracking service...")
-	log.Print("Connecting to message queue...")
+	log.Print("Connecting to message queue and MongoDB...")
 
 	connectToMQ()
 	defer conn.Close()
@@ -196,7 +197,8 @@ func main() {
 		}
 	}()
 
-	//TODO: Redis would go here.
+	log.Print("Connected to message queue and MongoDB")
+	log.Print("Starting connection to NWWS ingress server...")
 
 	//Consume messages from the tracking queue
 	msgs, err := ch.Consume(trackingQueue.Name, "", true, false, false, false, nil)
@@ -216,7 +218,7 @@ func main() {
 	for i := 0; i < 10; i++ {
 		go func(workerID int) {
 			for d := range msgs {
-				handleAlertMessage(string(d.Body), workerID)
+				handleAlertMessage(d.Body, workerID)
 			}
 		}(i)
 	}
@@ -467,7 +469,7 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 
 	// For new alerts, we can skip most of the processing
 	if vtec.Action == NWS.VTEC_NEW {
-		_, err := stateCollection.InsertOne(context.TODO(), SIREN.SirenAlert{
+		newAlert := SIREN.SirenAlert{
 			Identifier:         sirenID,
 			State:              "Active",
 			Expires: 			alert.Info.Expires,
@@ -485,8 +487,9 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 			},
 			MostRecentCAP: alert.Identifier,
 			Areas:         alert.Info.Area.Geocodes.UGC,
-		})
+		}
 
+		_, err := stateCollection.InsertOne(context.TODO(), newAlert)
 		if err != nil {
 			log.Error("Failed to insert the alert into the database", "id", sirenID, "worker", workerId, "err", err)
 			return
@@ -713,11 +716,11 @@ func deleteExpiredAlerts(expiration time.Duration) {
 
 // Handles parsing the alert JSON and processing it.
 // This is the main entry point for the alert processing logic.
-func handleAlertMessage(msg string, workerId int) {
+func handleAlertMessage(msg []byte, workerId int) {
 	alertsReceived.Inc()
 	var alert NWS.Alert
 	// Unmarshal the message
-	err := json.Unmarshal([]byte(msg), &alert)
+	err := msgpack.Unmarshal(msg, &alert)
 	if err != nil {
 		log.Error("Failed to unmarshal the alert", "worker", workerId, "err", err)
 		return

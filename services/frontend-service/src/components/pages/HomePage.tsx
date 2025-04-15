@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Position } from "geojson";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { io } from "socket.io-client";
 import Alert from "../elements/Alert";
@@ -7,6 +6,8 @@ import UpArrow from "../../assets/up-arrow.png";
 import DownArrow from "../../assets/down-arrow.png";
 import { useWindowSize } from "@uidotdev/usehooks";
 import { AlertColorMap, SirenAlert } from "../../model/Alert";
+import { decode } from "@msgpack/msgpack";
+import { feature } from "topojson-client";
 import Map, {
   Layer,
   LayerProps,
@@ -35,6 +36,11 @@ const API_URL =
     ? "https://siren-api.jaxcksn.dev"
     : "http://localhost:3030";
 
+const GEO_URL =
+  import.meta.env.MODE === "production"
+    ? "https://siren-geo.jaxcksn.dev"
+    : "http://localhost:6906";
+
 const HomePage = () => {
   const [isLoading, setIsLoading] = useState(true);
 
@@ -44,7 +50,7 @@ const HomePage = () => {
   // State variables for alert data this will be fetched from API later on
   // Sets will need to be added back in later they were taken out so there wouldnt be any hosting errors
 
-  const [alertData, setAlertData] = useState([]);
+  const [alertData, setAlertData] = useState<SirenAlert[]>([]);
   const [polygonGeojson, setPolygonGeojson] =
     useState<GeoJSON.FeatureCollection>({
       type: "FeatureCollection",
@@ -199,53 +205,57 @@ const HomePage = () => {
       type: "FeatureCollection",
       features: polygonFeatures as GeoJSON.Feature[],
     });
+  }, [alertData]);
 
-    //Do county next
-    const countyFeatures: GeoJSON.Feature[] = [];
-    alertData.forEach((alert: SirenAlert) => {
-      if (alert.features) {
-        for (const feature of alert.features) {
-          if (feature.type === "Polygon") {
-            countyFeatures.push({
-              type: "Feature",
-              geometry: {
-                type: "Polygon",
-                coordinates: [feature.data as Position[]],
-              },
-              properties: {
-                id: alert.identifier,
-                name: alert.capInfo.info.event,
-                color:
-                  AlertColorMap.get(alert.capInfo.info.eventcode.nws) ||
-                  "#efefef",
-              },
-            });
-          } else if (feature.type === "MultiPolygon") {
-            countyFeatures.push({
-              type: "Feature",
-              geometry: {
-                type: "MultiPolygon",
-                coordinates: [feature.data as Position[][]],
-              },
-              properties: {
-                id: alert.identifier,
-                name: alert.capInfo.info.event,
-                color:
-                  AlertColorMap.get(alert.capInfo.info.eventcode.nws) ||
-                  "#efefef",
-              },
-            });
+  useEffect(() => {
+    fetch(`${GEO_URL}/polygons`).then((res) => {
+      if (res.ok) {
+        res.arrayBuffer().then((arrayBuffer) => {
+          const uint8Array = new Uint8Array(arrayBuffer);
+          // Decode the MessagePack data
+          const topoData = decode(uint8Array) as TopoJSON.Topology;
+
+          const combinedFeatures: GeoJSON.FeatureCollection = {
+            type: "FeatureCollection",
+            features: [],
+          };
+
+          let features: GeoJSON.Feature[] = [];
+          for (const key in topoData.objects) {
+            const geo = feature(topoData, topoData.objects[key]);
+
+            if (geo.type == "FeatureCollection") {
+              features = features.concat(geo.features);
+            } else {
+              features.push(geo);
+            }
           }
-        }
+          combinedFeatures.features = features;
+
+          combinedFeatures.features.forEach((feature, index) => {
+            // Add the color property to each feature
+            const alert = alertData.find(
+              (alert: SirenAlert) => alert.identifier === feature.properties?.id
+            );
+            if (alert) {
+              if (!combinedFeatures.features[index].properties) {
+                combinedFeatures.features[index].properties = {};
+              }
+              combinedFeatures.features[index].properties.name =
+                alert.capInfo.info.event;
+            }
+          });
+
+          setCountyGeoJson({
+            type: "FeatureCollection",
+            features: combinedFeatures.features,
+          });
+        });
+      } else {
+        console.log("Error fetching polygons for counties");
       }
     });
-
-    // Insert county features into the polygonGeojson state
-    setCountyGeoJson({
-      type: "FeatureCollection",
-      features: countyFeatures.filter(Boolean),
-    });
-  }, [alertData]);
+  }, []);
 
   const getAlertList = () => {
     if (isLoading) {
@@ -267,12 +277,7 @@ const HomePage = () => {
             key={index}
             alertType={alert.capInfo.info.event}
             alertIssue={alert.capInfo.sender}
-            alertAreas={
-              alert.areaDescription.length >
-              (alert.capInfo?.info?.area?.description?.length || 0)
-                ? alert.capInfo.info.area.description
-                : alert.areaDescription
-            }
+            alertAreas={alert.capInfo.info.area.description}
             alertStartTime={alert.capInfo.info.effective}
             alertEndTime={alert.capInfo.info.expires}
             alertDescription={alert.capInfo.info.description.replace("/n", " ")}
@@ -481,6 +486,16 @@ const HomePage = () => {
                 </div>
               </Popup>
             )}
+            <Source
+              type="raster"
+              id="radar_reflectivity"
+              tiles={[
+                `https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity/MapServer/export?F=image&FORMAT=PNG32&TRANSPARENT=true&LAYERS=show:3&SIZE=256,256&BBOX={bbox-epsg-3857}&BBOXSR=3857&IMAGESR=3857&DPI=360`,
+              ]}
+              zoom={[-1, 0, 1, 2, 3, 4]}
+            >
+              <Layer id="radar_reflectivity" type="raster" paint={{}} />
+            </Source>
             {polygonGeojson.features.length > 0 && (
               <Source id="alert-polygons" type="geojson" data={polygonGeojson}>
                 {polygonFillStyle && <Layer {...polygonFillStyle}></Layer>}
