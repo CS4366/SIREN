@@ -30,7 +30,6 @@ const Alert = ({
   // Drawer dependdencies
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
 
-  //TODO: Modularize the props arrays incase of differing lengths
 
   return (
     // Alert component
@@ -143,5 +142,5 @@ interface AlertProps {
   alertInstructions: string;
   alertHistory: string[];
   color: string;
-  //polygon: number[];
 }
+

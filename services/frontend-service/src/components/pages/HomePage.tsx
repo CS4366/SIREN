@@ -22,35 +22,56 @@ interface SelectedSirenAlert {
   alertData: SirenAlert;
 }
 
+// Push URL
 const LIVE_URL =
   import.meta.env.MODE === "production"
     ? "https://siren-live.jaxcksn.dev"
     : "http://localhost:4000";
 
+// Socket connection to Push service
 const socket = io(LIVE_URL, {
   autoConnect: false,
 });
 
+// API URL
 const API_URL =
   import.meta.env.MODE === "production"
     ? "https://siren-api.jaxcksn.dev"
     : "http://localhost:3030";
 
+// GEO URL
 const GEO_URL =
   import.meta.env.MODE === "production"
     ? "https://siren-geo.jaxcksn.dev"
     : "http://localhost:6906";
 
+// Home Page Component
 const HomePage = () => {
+  
+  
+  // Loading State for Alerts
   const [isLoading, setIsLoading] = useState(true);
-
   // State variables for push and API connection status
   const [isPushConnected, setIsPushConnected] = useState(socket.connected);
   const [isAPIConnected, setIsAPIConnected] = useState(false);
-  // State variables for alert data this will be fetched from API later on
-  // Sets will need to be added back in later they were taken out so there wouldnt be any hosting errors
-
+  // State variables for alert data
   const [alertData, setAlertData] = useState<SirenAlert[]>([]);
+  // State variable for selected alert
+  const [selectedAlert, setSelectedAlert] = useState<SelectedSirenAlert>();
+  // State variables for total alerts and active alerts
+  const [activeAlerts, setActiveAlerts] = useState(0);
+  const [totalAlerts, setTotalAlerts] = useState(0); // Total Alerts Today
+  const [totalAlertsDiff, setTotalAlertsDiff] = useState(0); // Total Alerts Difference
+  const [totalAlertsBool, setTotalAlertsBool] = useState(false); // Total Alerts Increase Bool T->Increase F->Decrease
+  // State variables for common alert type
+  const [commonAlertType, setCommonAlertType] = useState("");
+  const [commonAlertTypePrev, setCommonAlertTypePrev] = useState("test");
+  // State variables for common regions
+  const [commonRegions, setCommonRegions] = useState<string[]>([]);
+  const [commonRegionsPrev, setCommonRegionsPrev] = useState<string[]>([]);
+  // State variables for resize
+  const { width } = useWindowSize();
+  // State variables for polygons and styles
   const [polygonGeojson, setPolygonGeojson] =
     useState<GeoJSON.FeatureCollection>({
       type: "FeatureCollection",
@@ -95,31 +116,8 @@ const HomePage = () => {
     },
   });
 
-  const [selectedAlert, setSelectedAlert] = useState<SelectedSirenAlert>();
 
-  const [activeAlerts] = useState(8);
-  const [activeIncrease] = useState(1);
-  const [totalAlerts] = useState(148);
-  const [totalAlertsIncrease] = useState(1);
-  const [commonAlertType] = useState("Servere Thunderstorm Warning");
-  const [commonAlertTypeYesterday] = useState("Special Weather Statement");
-  const [mostAlertAreas] = useState([
-    "West Texas",
-    "East Texas",
-    "Great Plains",
-  ]);
-  const [yesterdayMostAlertAreas] = useState(["West Texas", "East Texas"]);
-
-  const { width } = useWindowSize();
-
-  // TODO: Add functionality to fetch data for components from API
-  // getTotalAlertsToday
-  // getCurrentAlerts
-  // getMostPrevelentAlert
-  // getMostAffected Areas (Today/Right Now)
-  // getAlertsForArea (City/State/Zip, etc)
-  // displayAlertOnMap (Logic done, but data still needs to be fetched from API)
-
+  // Effect to handle alert polygon data
   useEffect(() => {
     // Calculate the alert polygon data
   }, [alertData]);
@@ -163,6 +161,7 @@ const HomePage = () => {
     };
   }, []);
 
+  // Gathering active alerts from the API
   useEffect(() => {
     setIsLoading(true);
     fetch(`${API_URL}/active`)
@@ -170,9 +169,10 @@ const HomePage = () => {
         if (res.ok) {
           res.json().then((data) => {
             setAlertData(data);
+            setActiveAlerts(data.length);
           });
         } else {
-          console.log("Error fetching data");
+          console.log("Error fetching active alerts data");
         }
       })
       .finally(() => {
@@ -180,6 +180,132 @@ const HomePage = () => {
       });
   }, []);
 
+  // Gathering number of alerts from today including inactive alerts from API
+  useEffect(() => {
+    fetch(`${API_URL}/alerts/today`)
+      .then((res) => {
+        if (res.ok) {
+          return res.json();
+        } else {
+          throw new Error("Failed to fetch total-today data");
+        }
+      })
+      .then((data) => {
+        // Set total alerts length
+        setTotalAlerts(data.length);
+      })
+      .catch((error) => {
+        console.error("Error fetching total-today data:", error);
+      });
+  }, []);
+
+  // Gathering active alerts for the previous day and calculating the increase from API
+  useEffect(() => {
+    fetch(`${API_URL}/alerts/yesterday`)
+      .then((res) => {
+        if (res.ok) {
+          return res.json();
+        } else {
+          throw new Error("Failed to fetch total-yesterday data");
+        }
+      })
+      .then((data) => {
+        // Updating the total alerts difference
+        setTotalAlertsDiff(Math.abs(totalAlerts - data.length));
+        setTotalAlertsBool(totalAlerts > data.length);
+      })
+      .catch((error) => {
+        console.error("Error fetching total-yesterday data:", error);
+      });
+  }, []);
+
+  // Gathering most common alert type from today from API
+  useEffect(() => {
+    fetch(`${API_URL}/alerts/today/common`)
+      .then((res) => {
+        if (res.ok) {
+          return res.json();
+        } else {
+          throw new Error("Failed to fetch today-common data");
+        }
+      })
+      .then((data) => {
+        // Set current common alert type
+        setCommonAlertType(data[0]._id);
+      })
+      .catch((error) => {
+        console.error("Error fetching today-common data:", error);
+      });
+  }, []);
+
+  // Gathering most common alert type from yesterday from API
+  useEffect(() => {
+    fetch(`${API_URL}/alerts/yesterday/common`)
+      .then((res) => {
+        if (res.ok) {
+          return res.json();
+        } else {
+          throw new Error("Failed to fetch yesterday-common data");
+        }
+      })
+      .then((data) => {
+        // Safegaurd for testing
+        if (data.length === 0) {
+          setCommonAlertTypePrev("Check with more data in DB (no last day data)");
+          return;
+        }
+        // Set previous common alert type
+        setCommonAlertTypePrev(data[0]._id);
+      })
+      .catch((error) => {
+        console.error("Error fetching yesterday-common data:", error);
+      });
+  }, []);
+
+  // Gathering most common regions from today from API
+  useEffect(() => {
+    fetch(`${API_URL}/alerts/today/regions`)
+      .then((res) => {
+        if (res.ok) {
+          return res.json();
+        } else {
+          throw new Error("Failed to fetch most today-regions data");
+        }
+      })
+      .then((data) => {
+        // Setting common regions
+        setCommonRegions(data);
+      })
+      .catch((error) => {
+        console.error("Error fetching today-regions data:", error);
+      });
+  }, []);
+
+  // Gathering most common alert type from yesterday from API
+  useEffect(() => {
+    fetch(`${API_URL}/alerts/yesterday/regions`)
+      .then((res) => {
+        if (res.ok) {
+          return res.json();
+        } else {
+          throw new Error("Failed to fetch most yesterday-regions data");
+        }
+      })
+      .then((data) => {
+        // Safegaurd for testing
+        if (data.length === 0) {
+          setCommonRegionsPrev(["    No data available", "    No data available"]);
+          return;
+        }
+        // Set previous common alert type
+        setCommonRegionsPrev(data);
+      })
+      .catch((error) => {
+        console.error("Error fetching yesterday-regions data:", error);
+      });
+  }, []);
+
+  // Mapping properties for polygons on map
   useEffect(() => {
     const polygonFeatures = alertData
       .map((alert: SirenAlert) => {
@@ -207,6 +333,7 @@ const HomePage = () => {
     });
   }, [alertData]);
 
+  // Gathering polygons from geo service
   useEffect(() => {
     fetch(`${GEO_URL}/polygons`).then((res) => {
       if (res.ok) {
@@ -257,20 +384,28 @@ const HomePage = () => {
     });
   }, []);
 
+
+
+  // Function to render the alert list
   const getAlertList = () => {
+    // If loading
     if (isLoading) {
       return (
         <div className="flex justify-center items-center w-full h-full">
           <p className="text-white text-lg">Loading Alerts...</p>
         </div>
       );
-    } else if (alertData.length === 0) {
+    } 
+    // If no alerts
+    else if (alertData.length === 0) {
       return (
         <div className="flex justify-center items-center w-full h-full">
           <p className="text-white text-lg">No active alerts found!</p>
         </div>
       );
-    } else {
+    } 
+    // Map alerted to alert component
+    else {
       return alertData.map((alert: SirenAlert, index: number) => {
         return (
           <Alert
@@ -292,15 +427,18 @@ const HomePage = () => {
     }
   };
 
+  // Handle map click event
   const handleMapClick = (event: MapMouseEvent) => {
     event.preventDefault();
 
     console.log(event);
     const feature = event.features && event.features[0];
+    // Check if the clicked feature is a polygon
     if (feature && feature.properties?.id) {
       const foundAlert = alertData.find(
         (alert: SirenAlert) => alert.identifier === feature.properties?.id
       );
+      // If an alert is found, set it as the selected alert
       if (foundAlert) {
         setSelectedAlert({
           longitude: event.lngLat.lng,
@@ -311,6 +449,34 @@ const HomePage = () => {
     }
   };
 
+  // Filter alert by area
+  const filterByArea = (area: string) => {
+    // Filter the alert data based on the area input
+    const filteredAlerts = alertData.filter((alert: SirenAlert) =>
+      alert.capInfo.info.area.description.includes(area)
+    );
+    // If the input is empty, reset to the original alert data
+    if (area.trim() === "") {
+      // If the input is empty, reset to the original alert data
+      fetch(`${API_URL}/active`)
+      .then((res) => {
+        if (res.ok) {
+        res.json().then((data) => {
+          setAlertData(data);
+        });
+        } else {
+        console.log("Error fetching active alerts data");
+        }
+      })
+      .catch((error) => {
+        console.error("Error resetting alert data:", error);
+      });
+    } else {
+      setAlertData(filteredAlerts);
+    }
+  };
+
+  // Render the HomePage component
   return (
     <div className="flex h-full w-full flex-col bg-[#283648] text-white items-start md:m-5 lg:m-5 xl:m-5 overflow-y-auto">
       {/* Header */}
@@ -367,14 +533,8 @@ const HomePage = () => {
               {activeAlerts}
             </h1>
             <div className="flex justify-start items-center p-2">
-              <img
-                src={activeIncrease > 0 ? UpArrow : DownArrow}
-                alt="arrow"
-                className="w-4 h-4"
-              />
               <p className="p-2 text-xs sm:text-xs md:text-xs lg:text-xs xl:text-xs truncate">
-                {activeIncrease > 0 ? "Up" : "Down"} {activeIncrease}% from
-                yesterday
+                Across all Regions
               </p>
             </div>
           </div>
@@ -387,12 +547,12 @@ const HomePage = () => {
             </h1>
             <div className="flex justify-start items-center p-2">
               <img
-                src={totalAlertsIncrease > 0 ? UpArrow : DownArrow}
+                src={totalAlertsBool === true ? UpArrow : DownArrow}
                 alt="arrow"
                 className="w-4 h-4"
               />
               <p className="p-2 text-xs sm:text-xs md:text-xs lg:text-xs xl:text-xs truncate">
-                {totalAlertsIncrease > 0 ? "Up" : "Down"} {totalAlertsIncrease}%
+                {totalAlertsBool === true ? "Up" : "Down"} {totalAlertsDiff} alerts
                 from yesterday
               </p>
             </div>
@@ -405,7 +565,7 @@ const HomePage = () => {
               {commonAlertType}
             </p>
             <p className="p-2 text-xs sm:text-xs md:text-xs lg:text-xs xl:text-xs truncate">
-              Yesterday: {commonAlertTypeYesterday}
+              Yesterday: {commonAlertTypePrev}
             </p>
           </div>
           <div className="flex flex-col h-full w-full md:w-1/2 lg:w-1/2 xl:1/2 border border-[#71717a] rounded-2xl justify-between overflow-y-auto">
@@ -414,18 +574,18 @@ const HomePage = () => {
             </p>
             <div className="flex-col w-full p-2 font-bold truncate">
               <h1 className="text-sm sm:text-sm md:text-md lg:text-lg xl:text-xl">
-                1. {mostAlertAreas[0]}
+                1. {typeof commonRegions[0] === "string" ? commonRegions[0].substring(4) : ""}
               </h1>
               <h1 className="text-sm sm:text-sm md:text-md lg:text-lg xl:text-xl">
-                2. {mostAlertAreas[1]}
+                2. {typeof commonRegions[1] === "string" ? commonRegions[1].substring(4) : ""}
               </h1>
               <h1 className="text-sm sm:text-sm md:text-md lg:text-lg xl:text-xl">
-                3. {mostAlertAreas[2]}
+                3. {typeof commonRegions[2] === "string" ? commonRegions[2].substring(4) : ""}
               </h1>
             </div>
             <p className="p-2 text-xs sm:text-xs md:text-xs lg:text-xs xl:text-xs truncate">
-              Yesterday: {yesterdayMostAlertAreas[0]} |{" "}
-              {yesterdayMostAlertAreas[1]}
+              Yesterday: {typeof commonRegionsPrev[0] === "string" ? commonRegionsPrev[0].substring(4) : ""} |{" "}
+              {typeof commonRegionsPrev[1] === "string" ? commonRegionsPrev[1].substring(4) : ""}
             </p>
           </div>
         </div>
@@ -440,9 +600,10 @@ const HomePage = () => {
             <div className="flex w-full justify-between items-center p-3">
               <h2 className="text-lg font-bold">Active Alert List</h2>
               <input
-                type="text"
-                placeholder="Filter by Location"
-                className="p-2 border w-2/5 border-white rounded-md focus:outline-none bg-transparent text-xs sm:text-xs md:text-sm lg:text-md xl:text-lg font-light"
+              type="text"
+              placeholder="Filter by Location"
+              className="p-2 border w-2/5 border-white rounded-md focus:outline-none bg-transparent text-xs sm:text-xs md:text-sm lg:text-md xl:text-lg font-light"
+              onChange={(e) => filterByArea(e.target.value)}
               />
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto">
