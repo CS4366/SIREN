@@ -162,8 +162,8 @@ func processChatroomMessages(client *xmpp.Client, alerts chan string) error {
 	for {
 		stanza, err := client.Recv()
 		if err != nil {
-			log.Printf("\nError receiving XMPP stanza: %v", err)
-			return err
+			log.Printf("Error receiving XMPP stanza: %v", err)
+			continue // Don't return; just skip the invalid stanza
 		}
 		switch v := stanza.(type) {
 		// There is a lot of XMPP stanza parsing here, but the important part is that we are looking for CAP alerts
