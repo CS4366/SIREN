@@ -158,8 +158,17 @@ func CalculateGeometry(areas []string, id string) (SIREN.AlertGeometry, error) {
 
 func CreateGeometryForActives() (geojson.FeatureCollection, error) {
 	log.Debug("Calculating geometry for active alerts...")
-	cursor, err := stateCollection.Find(context.TODO(), bson.M{
-		"state": "Active",
+	cursor, err := stateCollection.Aggregate(context.TODO(), bson.A{
+		bson.M{"$match": bson.M{"state": "Active"}},
+		bson.M{
+			"$lookup": bson.M{
+				"from":         "alerts",
+				"localField":   "mostRecentCAP",
+				"foreignField": "identifier",
+				"as":           "capInfo",
+			},
+		},
+		bson.M{"$unwind": "$capInfo"},
 	})
 	if err != nil {
 		log.Error("Failed to aggregate active alerts", "err", err)
