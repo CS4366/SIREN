@@ -319,9 +319,20 @@ app.get("/active", async (req: Request, res: Response) => {
   }
   // Get the alerts collection
   try {
-    const active = events.find({
-      state: "Active",
-    });
+    //This is an extremely inefficient way to do this, but it works for now
+    //we need to actively modifying the state instead of trying to do it this way
+    const active = events.aggregate([
+      { $match: { state: "Active" } },
+      {
+        $lookup: {
+          from: "alerts",
+          localField: "mostRecentCAP",
+          foreignField: "identifier",
+          as: "capInfo",
+        },
+      },
+      { $unwind: "$capInfo" },
+    ]);
     // Get all active alerts
     const activeEvents = await active.toArray();
     // Send the active alerts as a response
