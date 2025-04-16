@@ -26,11 +26,11 @@ const Alert = ({
   alertAreas,
   alertHistory,
   color,
+  onShowOnMap,
 }: AlertProps) => {
   // Drawer dependdencies
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
 
-  //TODO: Modularize the props arrays incase of differing lengths
 
   return (
     // Alert component
@@ -122,7 +122,7 @@ const Alert = ({
           </DrawerContent>
         </Drawer>
         {/* Button To Show Alert on Map (Maybe zoom in on area to implement)*/}
-        <Button className="h-2/3 w-full text-white  border border-white bg-transparent text-xs p-2">
+        <Button className="h-2/3 w-full text-white  border border-white bg-transparent text-xs p-2" onPress={onShowOnMap} >
           Show on Map
         </Button>
       </div>
@@ -143,5 +143,5 @@ interface AlertProps {
   alertInstructions: string;
   alertHistory: string[];
   color: string;
-  //polygon: number[];
+  onShowOnMap: () => void;
 }
