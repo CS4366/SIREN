@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 import { Button, Switch, Select, SelectItem, Slider,Dropdown, DropdownTrigger, DropdownMenu, DropdownSection, DropdownItem} from "@heroui/react";
+import { useLocation } from "../context/SettingsContext";
+
 
 const LIVE_URL =
   import.meta.env.MODE === "production"
@@ -16,29 +18,67 @@ const API_URL =
     ? "https://siren-api.jaxcksn.dev"
     : "http://localhost:3030";
 
+
+// SettingsPage component
 const SettingsPage = () => {
   // State variables for push and API connection status
   const [isPushConnected, setIsPushConnected] = useState(socket.connected);
   const [isAPIConnected, setIsAPIConnected] = useState(false);
+  const { setCoordinates } = useLocation();
+  const { setMapStyle } = useLocation();
+  const { setBorderOpacity } = useLocation();
+  const { setFillOpacity } = useLocation();
+  const { borderOpacity, fillOpacity } = useLocation();
+
+  // User Zip Code
+  const [zipCode, setZipCode] = useState("");
+
+  // Map style change
+  const handleMapStyleChange = (style: string) => {
+    // Gather style from input
+    const selectedStyle = mapStyles.find((map) => map.id.toString() === style)?.value;
+    // Set the style in the context
+    if (selectedStyle) {
+      setMapStyle(selectedStyle);
+    }
+  };
+
+
+  // Handle location change using zip code
+  const handleLocationChange = () => {
+    // Gather zip code from input
+    fetch(`https://api.zippopotam.us/us/${zipCode}`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to fetch location data");
+        }
+        return response.json();
+      })
+      .then((data) => {
+        // Extract latitude and longitude from the response
+        const { longitude, latitude } = data.places[0];
+        // Set the coordinates in the context
+        const newCoordinates = { longitude: parseFloat(longitude), latitude: parseFloat(latitude) };
+        setCoordinates(newCoordinates);
+      })
+      .catch((error) => {
+        console.error("Error fetching location data:", error);
+      });
+  };
 
 
   // TODO
-  // changeLocation
-  // useDefaultLocation
   // enablePushNotifications
   // disablePushNotifications
-  // setMapBasemap
-  // setAlertBorderOpacity
-  // setAlertBackgroundOpacity
   // setFilteredAlerts
 
   // Map types
-  const maps = [
-    { id: 1, name: "Navigation - Dark" },
-    { id: 2, name: "Dark" },
-    { id: 3, name: "Light" },
-    { id: 4, name: "Satellite Streets" },
-  ]
+  const mapStyles = [
+    { id: 1, name: "Navigation Night", value: "mapbox://styles/mapbox/navigation-night-v1" },
+    { id: 2, name: "Satellite", value: "mapbox://styles/mapbox/satellite-streets-v12" },
+    { id: 3, name: "Dark", value: "mapbox://styles/mapbox/dark-v11" },
+    { id: 4, name: "Light", value: "mapbox://styles/mapbox/light-v11" },
+  ];
 
   // Alert types will change later when we have a full list of alerts
   const alertTypes = [
@@ -141,10 +181,20 @@ const SettingsPage = () => {
               <p className="font-bold text-md">User Location</p>
               
               {/* Location Input */}
-              <div className="flex flex-row h-1/10 items-center gap-3">
-                <input type="text" placeholder="Lubbock, TX" className="w-3/4 bg-white text-[#71717a] h-full rounded-xl p-3 border-none outline-none" />
-                <Button className="h-full w-1/4 border border-white bg-white text-[#71717a] text-xs sm:text-xs md:text:xs lg:text-md xl:text-md p-2">Use Current Location</Button>
-              </div>
+                <div className="flex flex-row h-1/10 items-center gap-3">
+                <input 
+                  type="text" 
+                  placeholder="Enter Zip Code" 
+                  className="w-3/4 bg-white text-[#71717a] h-full rounded-xl p-3 border-none outline-none" 
+                  onChange={(e) => setZipCode(e.target.value)} 
+                />
+                <Button 
+                  className="h-full w-1/4 border border-white bg-white text-[#71717a] text-xs sm:text-xs md:text:xs lg:text-md xl:text-md p-2" 
+                  onClick={handleLocationChange}
+                >
+                  Use Location
+                </Button>
+                </div>
               <p className="font-light text-xs text-[#71717a]">Default location for the user</p>
               
               {/* Push Notifications Input */}
@@ -157,8 +207,8 @@ const SettingsPage = () => {
               {/* Map Input */}
               <h1 className="font-bold text-md mt-2">Map Settings</h1>
               <p className="text-sm">Map Basemap</p>
-              <Select label="Select a Map" variant="bordered" className="w-full h-auto border border-[#71717a] rounded-2xl">
-                {maps.map((map) => (
+              <Select label="Select a Map" variant="bordered" className="w-full h-auto border border-[#71717a] rounded-2xl" onChange={(e) => handleMapStyleChange(e.target.value)}>
+                {mapStyles.map((map) => (
                   <SelectItem key={map.id}>
                     {map.name}
                   </SelectItem>
@@ -168,7 +218,7 @@ const SettingsPage = () => {
                 <div className='flex flex-col w-1/2 gap-3'>
                   <p className="text-sm">Alert Border Opacity</p>
                   <Slider
-                      defaultValue={[100]}
+                      defaultValue={[borderOpacity]}
                       color="foreground"
                       maxValue={100}
                       minValue={0}
@@ -176,12 +226,13 @@ const SettingsPage = () => {
                       showSteps={true}
                       className="w-full"
                       size="lg"
+                      onChange={(value) => setBorderOpacity(value[0])}
                     />
                 </div>
                 <div className='flex flex-col w-1/2 gap-3'>
                   <p className="text-sm">Alert Background Opacity</p>
                   <Slider
-                    defaultValue={[40]}
+                    defaultValue={[fillOpacity]}
                     color="foreground"
                     maxValue={100}
                     minValue={0}
@@ -189,6 +240,7 @@ const SettingsPage = () => {
                     size="lg"
                     showSteps={true}
                     className="w-full"
+                    onChange={(value) => setFillOpacity(value[0])}
                   />
                 </div>
               </div>
@@ -241,10 +293,6 @@ const SettingsPage = () => {
             <p className="font-light text-md m-3">Random</p>
         </div>
       </div>
-      
-
-
-
     </div>
   );
 };
