@@ -8,7 +8,7 @@ import { useWindowSize } from "@uidotdev/usehooks";
 import { AlertColorMap, SirenAlert } from "../../model/Alert";
 import { decode } from "@msgpack/msgpack";
 import { feature } from "topojson-client";
-import { useLocation } from "../context/SettingsContext";
+import { useSettings } from "../context/SettingsContext";
 import Map, {
   Layer,
   LayerProps,
@@ -49,13 +49,12 @@ const GEO_URL =
 
 // Home Page Component
 const HomePage = () => {
-  
   // Map ref
   const mapRef = useRef<MapRef | null>(null);
 
   // Get the coordinates and map style from the context
-  const { coordinates, mapStyle, borderOpacity, fillOpacity } = useLocation();
-  
+  const { coordinates, mapStyle, borderOpacity, fillOpacity } = useSettings();
+
   // Loading State for Alerts
   const [isLoading, setIsLoading] = useState(true);
   // State variables for push and API connection status
@@ -90,7 +89,7 @@ const HomePage = () => {
       features: [],
     }
   );
-  const [polygonFillStyle] = useState<LayerProps>({
+  const [polygonFillStyle, setPolygonFillStyle] = useState<LayerProps>({
     id: "alert-polygons-fill",
     type: "fill",
     paint: {
@@ -98,15 +97,15 @@ const HomePage = () => {
       "fill-opacity": fillOpacity / 100,
     },
   });
-  const [polygonLineStyle] = useState<LayerProps>({
+  const [polygonLineStyle, setPolygonLineStyle] = useState<LayerProps>({
     id: "alert-polygons-outline",
     type: "line",
     paint: {
       "line-color": ["get", "color"],
-      "line-width": borderOpacity / 100,
+      "line-opacity": borderOpacity / 100,
     },
   });
-  const [countyFillStyle] = useState<LayerProps>({
+  const [countyFillStyle, setCountyFillStyle] = useState<LayerProps>({
     id: "county-polygons-fill",
     type: "fill",
     paint: {
@@ -114,15 +113,14 @@ const HomePage = () => {
       "fill-opacity": fillOpacity / 100,
     },
   });
-  const [countyLineStyle] = useState<LayerProps>({
+  const [countyLineStyle, setCountyLineStyle] = useState<LayerProps>({
     id: "county-polygons-outline",
     type: "line",
     paint: {
       "line-color": ["get", "color"],
-      "line-width": borderOpacity / 100,
+      "line-opacity": borderOpacity / 100,
     },
   });
-  
 
   // Effect to handle alert polygon data
   useEffect(() => {
@@ -225,7 +223,7 @@ const HomePage = () => {
         console.error("Error fetching total-yesterday data:", error);
       });
   }, [totalAlerts]);
-  
+
   // Gathering most common alert type from today from API
   useEffect(() => {
     fetch(`${API_URL}/alerts/today/common`)
@@ -262,7 +260,9 @@ const HomePage = () => {
       .then((data) => {
         // Safegaurd for testing
         if (data.length === 0) {
-          setCommonAlertTypePrev("Check with more data in DB (no last day data)");
+          setCommonAlertTypePrev(
+            "Check with more data in DB (no last day data)"
+          );
           return;
         }
         // Set previous common alert type
@@ -286,7 +286,7 @@ const HomePage = () => {
       .then((data) => {
         // Setting common regions
         if (data.length === 0) {
-          setCommonRegions(["    No Data","    No Data","    No Data"]);
+          setCommonRegions(["    No Data", "    No Data", "    No Data"]);
           return;
         }
         setCommonRegions(data);
@@ -309,7 +309,7 @@ const HomePage = () => {
       .then((data) => {
         // Safegaurd for testing
         if (data.length === 0) {
-          setCommonRegionsPrev(["    No Data","    No Data"]);
+          setCommonRegionsPrev(["    No Data", "    No Data"]);
           return;
         }
         // Set previous common alert type
@@ -349,14 +349,7 @@ const HomePage = () => {
       });
     };
 
-    // Run the function every half second
-    // ///////////////////
-    // THIS MAY HAVE TO CHANGE LATER ON AS IT COULD INTRODUCE BUGS, I ADDED IT FOR TESTING
-    // ///////////////////
-    const interval = setInterval(updatePolygonFeatures, 500);
-
-    // Cleanup interval on component unmount
-    return () => clearInterval(interval);
+    updatePolygonFeatures();
   }, [alertData]);
 
   // Gathering polygons from geo service
@@ -367,13 +360,11 @@ const HomePage = () => {
           const uint8Array = new Uint8Array(arrayBuffer);
           // Decode the MessagePack data
           const topoData = decode(uint8Array) as TopoJSON.Topology;
-          
 
           const combinedFeatures: GeoJSON.FeatureCollection = {
             type: "FeatureCollection",
             features: [],
           };
-
 
           let features: GeoJSON.Feature[] = [];
           for (const key in topoData.objects) {
@@ -386,7 +377,6 @@ const HomePage = () => {
             }
           }
           combinedFeatures.features = features;
-
           combinedFeatures.features.forEach((feature, index) => {
             // Add the color property to each feature
             const alert = alertData.find(
@@ -410,10 +400,8 @@ const HomePage = () => {
         console.log("Error fetching polygons for counties");
       }
     });
-  }, []);
+  }, [alertData]);
 
-  // Effect to handle map style changes
-  // This effect will be triggered whenever the mapStyle changes
   useEffect(() => {
     // Check if mapRef is defined and current
     if (mapRef.current) {
@@ -424,29 +412,37 @@ const HomePage = () => {
 
   // Effect to handle border opacity changes
   useEffect(() => {
-    if (mapRef.current) {
-      // Set the border opacity using the mapRef
-      mapRef.current?.getMap().setPaintProperty(
-        "alert-polygons-outline",
-        "line-opacity",
-        borderOpacity / 100
-      );
-    }
-  }
-  , [borderOpacity]);
+    const newPolygonLineStyle = polygonLineStyle;
+    newPolygonLineStyle.paint = {
+      "line-color": ["get", "color"],
+      "line-opacity": borderOpacity / 100,
+    };
+    setPolygonLineStyle(newPolygonLineStyle);
 
-  // Effect to handle fill opacity changes
+    const newCountyLineStyle = countyLineStyle;
+    newCountyLineStyle.paint = {
+      "line-color": ["get", "color"],
+      "line-opacity": borderOpacity / 100,
+    };
+    setCountyLineStyle(newCountyLineStyle);
+  }, [borderOpacity]);
+
   useEffect(() => {
-    if (mapRef.current) {
-      // Set the fill opacity using the mapRef
-      mapRef.current?.getMap().setPaintProperty(
-        "alert-polygons-fill",
-        "fill-opacity",
-        fillOpacity / 100
-      );
-    }
-  }
-  , [fillOpacity]);
+    const newFillStyle = countyFillStyle;
+    newFillStyle.paint = {
+      "fill-color": ["get", "color"],
+      "fill-opacity": fillOpacity / 100,
+    };
+
+    setCountyFillStyle(newFillStyle);
+
+    const newPolygonFillStyle = polygonFillStyle;
+    newPolygonFillStyle.paint = {
+      "fill-color": ["get", "color"],
+      "fill-opacity": fillOpacity / 100,
+    };
+    setPolygonFillStyle(newPolygonFillStyle);
+  }, [fillOpacity]);
 
   // Function to render the alert list
   const getAlertList = () => {
@@ -457,7 +453,7 @@ const HomePage = () => {
           <p className="text-white text-lg">Loading Alerts...</p>
         </div>
       );
-    } 
+    }
     // If no alerts
     else if (alertData.length === 0) {
       return (
@@ -465,7 +461,7 @@ const HomePage = () => {
           <p className="text-white text-lg">No active alerts found!</p>
         </div>
       );
-    } 
+    }
     // Map alerted to alert component
     else {
       return alertData.map((alert: SirenAlert, index: number) => {
@@ -522,18 +518,18 @@ const HomePage = () => {
     if (area.trim() === "") {
       // If the input is empty, reset to the original alert data
       fetch(`${API_URL}/active`)
-      .then((res) => {
-        if (res.ok) {
-        res.json().then((data) => {
-          setAlertData(data);
+        .then((res) => {
+          if (res.ok) {
+            res.json().then((data) => {
+              setAlertData(data);
+            });
+          } else {
+            console.log("Error fetching active alerts data");
+          }
+        })
+        .catch((error) => {
+          console.error("Error resetting alert data:", error);
         });
-        } else {
-        console.log("Error fetching active alerts data");
-        }
-      })
-      .catch((error) => {
-        console.error("Error resetting alert data:", error);
-      });
     } else {
       setAlertData(filteredAlerts);
     }
@@ -542,13 +538,54 @@ const HomePage = () => {
   // Function to fly to the alert area on the map
   const flyToAlert = (alert: SirenAlert) => {
     if (mapRef.current) {
-      const coordinates = alert.capInfo.info.area.polygon.coordinates[0][0];
-      mapRef.current.flyTo({
-        center: [coordinates[0], coordinates[1]],
-        zoom: 7,
-      });
+      let coordinates: GeoJSON.Position = [0, 0];
+      //Find alert coordinates
+      if (!alert.capInfo.info.area.polygon) {
+        //Get it from the county geojson
+        const alertId = alert.identifier;
+        const foundAlert = countyGeoJson.features.find(
+          (feature) => feature.properties?.id === alertId
+        );
+        if (foundAlert) {
+          if (foundAlert.geometry.type === "Polygon") {
+            coordinates = foundAlert.geometry.coordinates[0][0];
+          } else if (foundAlert.geometry.type === "MultiPolygon") {
+            coordinates = foundAlert.geometry.coordinates[0][0][0];
+          } else {
+            console.error(
+              "Geometry type is not supported for coordinates extraction:",
+              foundAlert.geometry.type
+            );
+          }
+          setSelectedAlert({
+            longitude: coordinates[0],
+            latitude: coordinates[1],
+            alertData: alert,
+          });
+          mapRef.current.flyTo({
+            center: [coordinates[0], coordinates[1]],
+            zoom: 7,
+          });
+        }
+      } else {
+        //Get it from the alert data
+        const coordinates = alert.capInfo.info.area.polygon.coordinates[0][0];
+        // Set the selected alert
+        setSelectedAlert({
+          longitude: coordinates[0],
+          latitude: coordinates[1],
+          alertData: alert,
+        });
+      }
+
+      if (coordinates[0] !== 0 && coordinates[1] !== 0) {
+        mapRef.current.flyTo({
+          center: [coordinates[0], coordinates[1]],
+          zoom: 7,
+        });
+      }
     }
-  }
+  };
 
   // Render the HomePage component
   return (
@@ -626,8 +663,8 @@ const HomePage = () => {
                 className="w-4 h-4"
               />
               <p className="p-2 text-xs sm:text-xs md:text-xs lg:text-xs xl:text-xs truncate">
-                {totalAlertsBool === true ? "Up" : "Down"} {totalAlertsDiff} alerts
-                from yesterday
+                {totalAlertsBool === true ? "Up" : "Down"} {totalAlertsDiff}{" "}
+                alerts from yesterday
               </p>
             </div>
           </div>
@@ -648,18 +685,33 @@ const HomePage = () => {
             </p>
             <div className="flex-col w-full p-2 font-bold truncate">
               <h1 className="text-sm sm:text-sm md:text-md lg:text-lg xl:text-xl">
-                1. {typeof commonRegions[0] === "string" ? commonRegions[0].substring(4) : ""}
+                1.{" "}
+                {typeof commonRegions[0] === "string"
+                  ? commonRegions[0].substring(4)
+                  : ""}
               </h1>
               <h1 className="text-sm sm:text-sm md:text-md lg:text-lg xl:text-xl">
-                2. {typeof commonRegions[1] === "string" ? commonRegions[1].substring(4) : ""}
+                2.{" "}
+                {typeof commonRegions[1] === "string"
+                  ? commonRegions[1].substring(4)
+                  : ""}
               </h1>
               <h1 className="text-sm sm:text-sm md:text-md lg:text-lg xl:text-xl">
-                3. {typeof commonRegions[2] === "string" ? commonRegions[2].substring(4) : ""}
+                3.{" "}
+                {typeof commonRegions[2] === "string"
+                  ? commonRegions[2].substring(4)
+                  : ""}
               </h1>
             </div>
             <p className="p-2 pb-4 text-xs sm:text-xs md:text-xs lg:text-xs xl:text-xs truncate">
-              Yesterday: {typeof commonRegionsPrev[0] === "string" ? commonRegionsPrev[0].substring(4) : ""} |{" "}
-              {typeof commonRegionsPrev[1] === "string" ? commonRegionsPrev[1].substring(4) : ""}
+              Yesterday:{" "}
+              {typeof commonRegionsPrev[0] === "string"
+                ? commonRegionsPrev[0].substring(4)
+                : ""}{" "}
+              |{" "}
+              {typeof commonRegionsPrev[1] === "string"
+                ? commonRegionsPrev[1].substring(4)
+                : ""}
             </p>
           </div>
         </div>
@@ -674,10 +726,10 @@ const HomePage = () => {
             <div className="flex w-full justify-between items-center p-3">
               <h2 className="text-lg font-bold">Active Alert List</h2>
               <input
-              type="text"
-              placeholder="Filter by Location"
-              className="p-2 border w-2/5 border-white rounded-md focus:outline-none bg-transparent text-xs sm:text-xs md:text-sm lg:text-md xl:text-lg font-light"
-              onChange={(e) => filterByArea(e.target.value)}
+                type="text"
+                placeholder="Filter by Location"
+                className="p-2 border w-2/5 border-white rounded-md focus:outline-none bg-transparent text-xs sm:text-xs md:text-sm lg:text-md xl:text-lg font-light"
+                onChange={(e) => filterByArea(e.target.value)}
               />
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto">
