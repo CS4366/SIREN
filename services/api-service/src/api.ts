@@ -43,24 +43,28 @@ app.get("/", (req: Request, res: Response) => {
 app.get("/alerts/today", async (req: Request, res: Response) => {
   // Check if MongoDB is connected
   if (!client) {
-     res.status(500).send("MongoDB not connected");
-     return;
+    res.status(500).send("MongoDB not connected");
+    return;
   }
   // Get the alerts collection
   try {
     const alerts = db.collection("alerts");
     // Get the current date in UTC
     const now = new Date();
-    const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const startOfDay = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    );
     const endOfDay = new Date(startOfDay);
     endOfDay.setUTCDate(startOfDay.getUTCDate() + 1);
     // Get all alerts issued today
-    const todaysAlerts = await alerts.find({
-      sent: {
-        $gte: startOfDay,
-        $lt: endOfDay,
-      },
-    }).toArray();
+    const todaysAlerts = await alerts
+      .find({
+        sent: {
+          $gte: startOfDay,
+          $lt: endOfDay,
+        },
+      })
+      .toArray();
     // Send the alerts as a response
     res.status(200).json(todaysAlerts);
   } catch (error) {
@@ -73,36 +77,40 @@ app.get("/alerts/today", async (req: Request, res: Response) => {
 app.get("/alerts/today/common", async (req: Request, res: Response) => {
   // Check if MongoDB is connected
   if (!client) {
-     res.status(500).send("MongoDB not connected");
-     return;
+    res.status(500).send("MongoDB not connected");
+    return;
   }
   // Get the alerts collection
   try {
     const alerts = db.collection("alerts");
     // Get the current date in UTC
     const now = new Date();
-    const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const startOfDay = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    );
     const endOfDay = new Date(startOfDay);
     endOfDay.setUTCDate(startOfDay.getUTCDate() + 1);
     // Get the most common alert event from today
-    const todaysAlerts = await alerts.aggregate([
-      {
-        $match: {
-          sent: {
-            $gte: startOfDay,
-            $lt: endOfDay,
+    const todaysAlerts = await alerts
+      .aggregate([
+        {
+          $match: {
+            sent: {
+              $gte: startOfDay,
+              $lt: endOfDay,
+            },
           },
         },
-      },
-      {
-        $group: {
-          _id: "$info.event",
-          count: { $sum: 1 },
-      },
-      },
-      { $sort: { count: -1 } },
-      { $limit: 1 },
-    ]).toArray();
+        {
+          $group: {
+            _id: "$info.event",
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { count: -1 } },
+        { $limit: 1 },
+      ])
+      .toArray();
     // Send the most common alert event as a response
     res.status(200).json(todaysAlerts);
   } catch (error) {
@@ -115,37 +123,41 @@ app.get("/alerts/today/common", async (req: Request, res: Response) => {
 app.get("/alerts/yesterday/common", async (req: Request, res: Response) => {
   // Check if MongoDB is connected
   if (!client) {
-     res.status(500).send("MongoDB not connected");
-     return;
+    res.status(500).send("MongoDB not connected");
+    return;
   }
   // Get the alerts collection
   try {
     const alerts = db.collection("alerts");
     // Get the yesterdays date in UTC
     const now = new Date();
-    const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const startOfDay = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    );
     startOfDay.setUTCDate(startOfDay.getUTCDate() - 1);
     const endOfDay = new Date(startOfDay);
     endOfDay.setUTCDate(startOfDay.getUTCDate() + 1);
     // Get the most common alert event from yesterday
-    const todaysAlerts = await alerts.aggregate([
-      {
-        $match: {
-          sent: {
-            $gte: startOfDay,
-            $lt: endOfDay,
+    const todaysAlerts = await alerts
+      .aggregate([
+        {
+          $match: {
+            sent: {
+              $gte: startOfDay,
+              $lt: endOfDay,
+            },
           },
         },
-      },
-      {
-        $group: {
-          _id: "$info.event", // Group by the event text
-          count: { $sum: 1 },
-      },
-      },
-      { $sort: { count: -1 } },
-      { $limit: 1 },
-    ]).toArray();
+        {
+          $group: {
+            _id: "$info.event", // Group by the event text
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { count: -1 } },
+        { $limit: 1 },
+      ])
+      .toArray();
     // Send the most common alert event as a response
     res.status(200).json(todaysAlerts);
   } catch (error) {
@@ -158,25 +170,29 @@ app.get("/alerts/yesterday/common", async (req: Request, res: Response) => {
 app.get("/alerts/yesterday", async (req: Request, res: Response) => {
   // Check if MongoDB is connected
   if (!client) {
-     res.status(500).send("MongoDB not connected");
-     return;
+    res.status(500).send("MongoDB not connected");
+    return;
   }
   // Get the alerts collection
   try {
     const alerts = db.collection("alerts");
     // Get the yesterdays date in UTC
     const now = new Date();
-    const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const startOfDay = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    );
     startOfDay.setUTCDate(startOfDay.getUTCDate() - 1);
     const endOfDay = new Date(startOfDay);
     endOfDay.setUTCDate(startOfDay.getUTCDate() + 1);
     // Get all alerts issued yesterday
-    const todaysAlerts = await alerts.find({
-      sent: {
-        $gte: startOfDay,
-        $lt: endOfDay,
-      },
-    }).toArray();
+    const todaysAlerts = await alerts
+      .find({
+        sent: {
+          $gte: startOfDay,
+          $lt: endOfDay,
+        },
+      })
+      .toArray();
     // Send the alerts as a response
     res.status(200).json(todaysAlerts);
   } catch (error) {
@@ -197,34 +213,38 @@ app.get("/alerts/today/regions", async (req: Request, res: Response) => {
     const alerts = db.collection("alerts");
     // Get the current date in UTC
     const now = new Date();
-    const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const startOfDay = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    );
     const endOfDay = new Date(startOfDay);
     endOfDay.setUTCDate(startOfDay.getUTCDate() + 1);
     // Get the 3 most commonly used sendernames from today
-    const topSendernames = await alerts.aggregate([
-      {
-        $match: {
-          sent: {
-            $gte: startOfDay,
-            $lt: endOfDay,
+    const topSendernames = await alerts
+      .aggregate([
+        {
+          $match: {
+            sent: {
+              $gte: startOfDay,
+              $lt: endOfDay,
+            },
           },
         },
-      },
-      {
-        $group: {
-          _id: "$info.sendername", // Group by sendername
-          count: { $sum: 1 },
+        {
+          $group: {
+            _id: "$info.sendername", // Group by sendername
+            count: { $sum: 1 },
+          },
         },
-      },
-      { $sort: { count: -1 } },
-      { $limit: 3 },
-      {
-        $project: {
-          _id: 0,
-          sendername: "$_id", // Rename _id to sendername
+        { $sort: { count: -1 } },
+        { $limit: 3 },
+        {
+          $project: {
+            _id: 0,
+            sendername: "$_id", // Rename _id to sendername
+          },
         },
-      },
-    ]).toArray();
+      ])
+      .toArray();
     // Map the results to get the sendernames
     const sendernamesList = topSendernames.map((item) => item.sendername);
     // Send the sendernames as a response
@@ -247,35 +267,39 @@ app.get("/alerts/yesterday/regions", async (req: Request, res: Response) => {
     const alerts = db.collection("alerts");
     // Get the yesterdays date in UTC
     const now = new Date();
-    const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const startOfDay = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    );
     startOfDay.setUTCDate(startOfDay.getUTCDate() - 1);
     const endOfDay = new Date(startOfDay);
     endOfDay.setUTCDate(startOfDay.getUTCDate() + 1);
     // Get the 3 most commonly used sendernames from yesterday
-    const topSendernames = await alerts.aggregate([
-      {
-        $match: {
-          sent: {
-            $gte: startOfDay,
-            $lt: endOfDay,
+    const topSendernames = await alerts
+      .aggregate([
+        {
+          $match: {
+            sent: {
+              $gte: startOfDay,
+              $lt: endOfDay,
+            },
           },
         },
-      },
-      {
-        $group: {
-          _id: "$info.sendername", // Group by sendername
-          count: { $sum: 1 },
+        {
+          $group: {
+            _id: "$info.sendername", // Group by sendername
+            count: { $sum: 1 },
+          },
         },
-      },
-      { $sort: { count: -1 } },
-      { $limit: 2 },
-      {
-        $project: {
-          _id: 0,
-          sendername: "$_id", // Rename _id to sendername
+        { $sort: { count: -1 } },
+        { $limit: 2 },
+        {
+          $project: {
+            _id: 0,
+            sendername: "$_id", // Rename _id to sendername
+          },
         },
-      },
-    ]).toArray();
+      ])
+      .toArray();
     // Map the results to get the sendernames
     const sendernamesList = topSendernames.map((item) => item.sendername);
     // Send the sendernames as a response
@@ -295,21 +319,9 @@ app.get("/active", async (req: Request, res: Response) => {
   }
   // Get the alerts collection
   try {
-    //This is an extremely inefficient way to do this, but it works for now
-    //we need to actively modifying the state instead of trying to do it this way
-    const active = events.aggregate([
-      { $match: { state: "Active" } },
-      {
-        $lookup: {
-          from: "alerts",
-          localField: "mostRecentCAP",
-          foreignField: "identifier",
-          as: "capInfo",
-        },
-      },
-      { $unwind: "$capInfo" },
-      { $match: { "capInfo.info.expires": { $gt: new Date() } } },
-    ]);
+    const active = events.find({
+      state: "Active",
+    });
     // Get all active alerts
     const activeEvents = await active.toArray();
     // Send the active alerts as a response
