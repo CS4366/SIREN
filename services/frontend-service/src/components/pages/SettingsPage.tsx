@@ -330,9 +330,32 @@ const SettingsPage = () => {
           <h1 className="font-bold text-lg m-3">
             Open Source Acknowledgements
           </h1>
-          <p className="font-light text-md m-3">Random</p>
+          <p className="font-light text-md m-3">
+            SIREN was built with all weather data coming from the National
+            Weather Service (NWS) and the National Oceanic and Atmospheric
+            Administration (NOAA) via the NWWS OI. The maps were built using 
+            Mapbox. Zip code data was gathered using the Zippopotam.us API. 
+            We also ask that if you use our public API or Push Service for 
+            your own projects to give us credit.
+          </p>
           <h1 className="font-bold text-lg m-3">About SIREN</h1>
-          <p className="font-light text-md m-3">Random</p>
+            <p className="font-light text-md m-3">
+            SIREN was developed by Texas Tech University students to ingest 
+            and disseminate weather alerts from the NWWS OI. The frontend was 
+            built using React, TypeScript and Tailwind CSS. The backend, which 
+            is composed of microservices and helper services, was built using
+            with a mixture of GoLang, and TypeScript. All data is stored in a 
+            NoSQL database (MongoDB). If you wish to learn more about the 
+            architecture of SIREN or wish to use our services, please visit our &nbsp;  
+            <a 
+              href="https://github.com/CS4366/SIREN" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-blue-500 underline"
+            >
+              GitHub
+            </a>.
+            </p>
         </div>
       </div>
     </div>
