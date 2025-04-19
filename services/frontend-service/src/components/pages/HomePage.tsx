@@ -9,6 +9,7 @@ import { AlertColorMap, SirenAlert } from "../../model/Alert";
 import { decode } from "@msgpack/msgpack";
 import { feature } from "topojson-client";
 import { useSettings } from "../context/SettingsContext";
+import { useAlertContext } from "../context/AlertContext";
 import Map, {
   Layer,
   LayerProps,
@@ -55,13 +56,20 @@ const HomePage = () => {
   // Get the coordinates and map style from the context
   const { coordinates, mapStyle, borderOpacity, fillOpacity } = useSettings();
 
+  const {
+    alertData,
+    setAlertData,
+    polygonGeoJson,
+    setPolygonGeoJson,
+    countyGeoJson,
+    setCountyGeoJson,
+  } = useAlertContext();
+
   // Loading State for Alerts
   const [isLoading, setIsLoading] = useState(true);
   // State variables for push and API connection status
   const [isPushConnected, setIsPushConnected] = useState(socket.connected);
   const [isAPIConnected, setIsAPIConnected] = useState(false);
-  // State variables for alert data
-  const [alertData, setAlertData] = useState<SirenAlert[]>([]);
   // State variable for selected alert
   const [selectedAlert, setSelectedAlert] = useState<SelectedSirenAlert>();
   // State variables for total alerts and active alerts
@@ -78,17 +86,7 @@ const HomePage = () => {
   // State variables for resize
   const { width } = useWindowSize();
   // State variables for polygons and styles
-  const [polygonGeojson, setPolygonGeojson] =
-    useState<GeoJSON.FeatureCollection>({
-      type: "FeatureCollection",
-      features: [],
-    });
-  const [countyGeoJson, setCountyGeoJson] = useState<GeoJSON.FeatureCollection>(
-    {
-      type: "FeatureCollection",
-      features: [],
-    }
-  );
+  
   const [polygonFillStyle, setPolygonFillStyle] = useState<LayerProps>({
     id: "alert-polygons-fill",
     type: "fill",
@@ -343,7 +341,7 @@ const HomePage = () => {
         .filter(Boolean);
 
       // Insert polygon features into the polygonGeojson state
-      setPolygonGeojson({
+      setPolygonGeoJson({
         type: "FeatureCollection",
         features: polygonFeatures as GeoJSON.Feature[],
       });
@@ -784,8 +782,8 @@ const HomePage = () => {
             >
               <Layer id="radar_reflectivity" type="raster" paint={{}} />
             </Source>
-            {polygonGeojson.features.length > 0 && (
-              <Source id="alert-polygons" type="geojson" data={polygonGeojson}>
+            {polygonGeoJson.features.length > 0 && (
+              <Source id="alert-polygons" type="geojson" data={polygonGeoJson}>
                 {polygonFillStyle && <Layer {...polygonFillStyle}></Layer>}
                 {polygonLineStyle && <Layer {...polygonLineStyle}></Layer>}
               </Source>

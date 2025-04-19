@@ -12,6 +12,7 @@ import SettingsIconDark from "./assets/SettingsIconDark.png";
 import DataIconDark from "./assets/DataIconDark.png";
 import MapIconDark from "./assets/MapIconDark.png";
 import { SettingsProvider } from "./components/context/SettingsContext";
+import { AlertProvider } from "./components/context/AlertContext";
 
 
 function App() {
@@ -63,12 +64,14 @@ function App() {
           <div className="flex w-full justify-center items-center h-screen">
             {/* Router */}
             <SettingsProvider>
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/data" element={<DataPage />} />
-                <Route path="/map" element={<MapPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-              </Routes>
+              <AlertProvider>
+                <Routes>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/data" element={<DataPage />} />
+                  <Route path="/map" element={<MapPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Routes>
+              </AlertProvider>
             </SettingsProvider>
           </div>
         </div>
