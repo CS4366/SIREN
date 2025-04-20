@@ -310,6 +310,30 @@ app.get("/alerts/yesterday/regions", async (req: Request, res: Response) => {
   }
 });
 
+
+// Get all alerts in DB
+app.get("/alerts/all", async (req: Request, res: Response) => {
+  // Check if MongoDB is connected
+  if (!client) {
+    res.status(500).send("MongoDB not connected");
+    return;
+  }
+  // Get the alerts collection
+  try {
+    const alerts = db.collection("alerts");
+    // Get all alerts
+    const allAlerts = await alerts.find().toArray();
+    // Send the alerts as a response
+    res.status(200).json(allAlerts);
+  } catch (error) {
+    console.error("Error fetching all alerts", error);
+    res.status(500).send("Error fetching all alerts");
+  }
+});
+
+// THIS CURRENTLY STILL PULLS INACTIVE ALERT DATA
+// COULD BE SOMETHING WITH THE TRACKING SERVICE
+
 // Get all active alerts
 app.get("/active", async (req: Request, res: Response) => {
   // Check if MongoDB is connected
