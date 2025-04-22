@@ -114,6 +114,7 @@ func ConnectToMongo() {
 
 	alertsCollection = client.Database("siren").Collection("alerts")
 	stateCollection = client.Database("siren").Collection("state")
+
 }
 
 /**============================================
@@ -254,10 +255,39 @@ func findReference(ctx context.Context, reference NWS.Reference, sirenId string,
 	visited[reference.Identifier] = true
 
 	var referencedAlert NWS.CapResponseData
-	err := SIREN.GetJSON(ctx, fmt.Sprintf("https://api.weather.gov/alerts/%s", reference.Identifier), &referencedAlert)
+
+	//Check if the reference is already in the database
+	var hasReference bool = true
+	var existingAlert NWS.Alert
+	err := alertsCollection.FindOne(ctx, bson.M{"identifier": reference.Identifier}).Decode(&existingAlert)
 	if err != nil {
-		debugLog(fmt.Sprintf("Failed to fetch referenced alert: %s", err))
-		return nil
+		if err == mongo.ErrNoDocuments {
+			hasReference = false
+		}
+	}
+
+	if hasReference {
+		expiredRefs := NWS.ConvertReferencesToStrings(existingAlert.Info.Parameters.ExpiredReferences)
+		// If the alert is already in the database, we can use it
+		referencedAlert = NWS.CapResponseData{
+			Properties: NWS.CapPropertiesData{
+				Geocode: NWS.CapGeocodeData{UGC: existingAlert.Info.Area.Geocodes.UGC, SAME: existingAlert.Info.Area.Geocodes.SAME},
+				Parameters: NWS.CapParametersData{
+					VTEC:              []string{existingAlert.Info.Parameters.VTEC},
+					ExpiredReferences: expiredRefs,
+				},
+				Sent:       existingAlert.Sent,
+				Expires:    existingAlert.Info.Expires,
+				Effective:  existingAlert.Info.Effective,
+				References: existingAlert.References,
+			},
+		}
+	} else {
+		err := SIREN.GetJSON(ctx, fmt.Sprintf("https://api.weather.gov/alerts/%s", reference.Identifier), &referencedAlert)
+		if err != nil {
+			debugLog(fmt.Sprintf("Failed to fetch referenced alert: %s", err))
+			return nil
+		}
 	}
 
 	//Check if the referenced alert has a VTEC
@@ -298,6 +328,7 @@ func findReference(ctx context.Context, reference NWS.Reference, sirenId string,
 	miniCAP.References = referencedAlert.Properties.References
 	miniCAP.ExpiredReferences = expiredReferences
 	miniCAP.Sent = reference.Sent
+	miniCAP.Expires = referencedAlert.Properties.Expires
 
 	var foundChildren []SIREN.MiniCAP
 	for _, childID := range miniCAP.References {
@@ -312,6 +343,7 @@ func findReference(ctx context.Context, reference NWS.Reference, sirenId string,
 	results := []SIREN.MiniCAP{miniCAP}
 	results = append(results, foundChildren...)
 	return results
+
 }
 
 // Recitifies the history and areas for a given alert using CAP references
@@ -363,6 +395,7 @@ func findAlertHistory(cap NWS.Alert, vtec *NWS.VTEC, currentHistory []string, wo
 			VtecAction:            miniCAP.VTEC.Action,
 			AppliesTo:             miniCAP.Areas,
 			CapID:                 miniCAP.Identifier,
+			ExpiresAt:             miniCAP.Expires,
 		})
 	}
 
@@ -424,6 +457,11 @@ func handleAlertHistory(existingAlert *SIREN.SirenAlert, alert NWS.Alert, vtec *
 				existingAlert.Areas = append(existingAlert.Areas, area)
 			}
 		}
+
+		//Update the area expiration time using the latest expiration time in the history
+		if historyObject.ExpiresAt.After(existingAlert.Expires) {
+			existingAlert.Expires = historyObject.ExpiresAt
+		}
 	}
 
 	// These next couple of lines are used to determine if the alert is active or inactive
@@ -472,7 +510,7 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 		newAlert := SIREN.SirenAlert{
 			Identifier:         sirenID,
 			State:              "Active",
-			Expires: 			alert.Info.Expires,
+			Expires:            alert.Info.Expires,
 			MostRecentSentTime: time.Now(),
 			LastUpdatedTime:    time.Now(),
 			UpgradedTo:         "",
@@ -483,6 +521,7 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 					VtecActionDescription: NWS.GetLongStateName(vtec.Action),
 					AppliesTo:             alert.Info.Area.Geocodes.UGC,
 					CapID:                 alert.Identifier,
+					ExpiresAt:             alert.Info.Expires,
 				},
 			},
 			MostRecentCAP: alert.Identifier,
@@ -507,7 +546,7 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 			existingAlert = SIREN.SirenAlert{
 				Identifier:         sirenID,
 				State:              "Active",
-				Expires: 			alert.Info.Expires,
+				Expires:            alert.Info.Expires,
 				MostRecentSentTime: time.Now(),
 				LastUpdatedTime:    time.Now(),
 				UpgradedTo:         "",
@@ -515,10 +554,6 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 				Areas:              []string{},
 				MostRecentCAP:      alert.Identifier,
 			}
-			historyResult := findAlertHistory(alert, vtec, []string{}, workerId)
-			existingAlert.History = historyResult.History
-			existingAlert.Areas = historyResult.Areas
-
 		} else {
 			log.Error("Failed to insert the alert into the database", "id", sirenID, "worker", workerId, "err", err)
 			return
@@ -531,8 +566,6 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 	//Update the most recent sent time and CAP ID
 	existingAlert.MostRecentSentTime = alert.Sent
 	existingAlert.MostRecentCAP = alert.Identifier
-	// Update the expires to most recent expires 
-	existingAlert.Expires = alert.Info.Expires
 
 	//Upsert the alert in the database
 	_, err = stateCollection.UpdateOne(
@@ -551,92 +584,96 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 
 // Handles alerts without VTEC codes
 func handleSpecialAlert(alert NWS.Alert, workerId int) {
-    // Generate a unique ID for this special alert
-    specialID := SIREN.GenerateSpecialAlertID(alert)
-    
-    // Get a lock for this alert
-    alertLock := getLock(specialID)
-    alertLock.mu.Lock()
-    defer alertLock.mu.Unlock()
-    
-    log.Debug("Processing special alert (no VTEC)", "id", specialID, "worker", workerId)
-    
-    // Check if this alert already exists in the database
-    var existingAlert SIREN.SirenAlert
-    err := stateCollection.FindOne(context.TODO(), bson.M{"identifier": specialID}).Decode(&existingAlert)
-    
-    if err != nil {
-        if err == mongo.ErrNoDocuments {
-            // Create a new alert
-            newAlert := SIREN.SirenAlert{
-                Identifier:         specialID,
-                State:              "Active", // Default state
-                Expires:            alert.Info.Expires,
-                MostRecentSentTime: alert.Sent,
-                LastUpdatedTime:    time.Now(),
-                History: []SIREN.SirenAlertHistory{
-                    {
-                        RecievedAt:            time.Now(),
-                        VtecActionDescription: "Issued", // No VTEC action, use generic term
-                        VtecAction:            NWS.VTEC_NEW, // Use NEW as the most logical default
-                        AppliesTo:             alert.Info.Area.Geocodes.UGC,
-                        CapID:                 alert.Identifier,
-                    },
-                },
-                MostRecentCAP: alert.Identifier,
-                Areas:         alert.Info.Area.Geocodes.UGC,
-            }
-            
-            // Insert the new alert
-            _, err = stateCollection.InsertOne(context.TODO(), newAlert)
-            if err != nil {
-                log.Error("Failed to insert special alert", "id", specialID, "worker", workerId, "err", err)
-                return
-            }
-            log.Debug("Special alert inserted", "id", specialID, "worker", workerId)
-            
-        } else {
-            log.Error("Error querying database for special alert", "id", specialID, "worker", workerId, "err", err)
-            return
-        }
-    } else {
-        // Update existing alert
-        existingAlert.MostRecentSentTime = alert.Sent
-        existingAlert.LastUpdatedTime = time.Now()
-        existingAlert.MostRecentCAP = alert.Identifier
-        existingAlert.Expires = alert.Info.Expires
-        
-        // Add a new history entry
-        historyEntry := SIREN.SirenAlertHistory{
-            RecievedAt:            time.Now(),
-            VtecActionDescription: "Updated", // Generic term for updates
-            VtecAction:            NWS.VTEC_CON, // CON (continued) is a reasonable default for updates
-            AppliesTo:             alert.Info.Area.Geocodes.UGC,
-            CapID:                 alert.Identifier,
-        }
-        
-        existingAlert.History = append([]SIREN.SirenAlertHistory{historyEntry}, existingAlert.History...)
-        
-        // Update areas if needed
-        for _, area := range alert.Info.Area.Geocodes.UGC {
-            if !slices.Contains(existingAlert.Areas, area) {
-                existingAlert.Areas = append(existingAlert.Areas, area)
-            }
-        }
-        
-        // Update the alert in the database
-        _, err = stateCollection.UpdateOne(
-            context.TODO(),
-            bson.M{"identifier": specialID},
-            bson.M{"$set": existingAlert},
-        )
-        
-        if err != nil {
-            log.Error("Failed to update special alert", "id", specialID, "worker", workerId, "err", err)
-            return
-        }
-        log.Debug("Special alert updated", "id", specialID, "worker", workerId)
-    }
+	// Generate a unique ID for this special alert
+	specialID := SIREN.GenerateSpecialAlertID(alert)
+
+	// Get a lock for this alert
+	alertLock := getLock(specialID)
+	alertLock.mu.Lock()
+	defer alertLock.mu.Unlock()
+
+	log.Debug("Processing special alert (no VTEC)", "id", specialID, "worker", workerId)
+
+	// Check if this alert already exists in the database
+	var existingAlert SIREN.SirenAlert
+	err := stateCollection.FindOne(context.TODO(), bson.M{"identifier": specialID}).Decode(&existingAlert)
+
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			// Create a new alert
+			newAlert := SIREN.SirenAlert{
+				Identifier:         specialID,
+				State:              "Active", // Default state
+				Expires:            alert.Info.Expires,
+				MostRecentSentTime: alert.Sent,
+				LastUpdatedTime:    time.Now(),
+				History: []SIREN.SirenAlertHistory{
+					{
+						RecievedAt:            time.Now(),
+						VtecActionDescription: "New",
+						VtecAction:            NWS.VTEC_NEW,
+						AppliesTo:             alert.Info.Area.Geocodes.UGC,
+						CapID:                 alert.Identifier,
+						ExpiresAt:             alert.Info.Expires,
+					},
+				},
+				MostRecentCAP: alert.Identifier,
+				Areas:         alert.Info.Area.Geocodes.UGC,
+			}
+
+			// Insert the new alert
+			_, err = stateCollection.InsertOne(context.TODO(), newAlert)
+			if err != nil {
+				log.Error("Failed to insert special alert", "id", specialID, "worker", workerId, "err", err)
+				return
+			}
+			log.Debug("Special alert inserted", "id", specialID, "worker", workerId)
+
+		} else {
+			log.Error("Error querying database for special alert", "id", specialID, "worker", workerId, "err", err)
+			return
+		}
+	} else {
+		// Update existing alert
+		existingAlert.MostRecentSentTime = alert.Sent
+		existingAlert.LastUpdatedTime = time.Now()
+		existingAlert.MostRecentCAP = alert.Identifier
+		if existingAlert.Expires.Before(alert.Info.Expires) {
+			existingAlert.Expires = alert.Info.Expires
+		}
+
+		// Add a new history entry
+		historyEntry := SIREN.SirenAlertHistory{
+			RecievedAt:            time.Now(),
+			VtecActionDescription: "Updated",
+			VtecAction:            NWS.VTEC_CON,
+			AppliesTo:             alert.Info.Area.Geocodes.UGC,
+			CapID:                 alert.Identifier,
+			ExpiresAt:             alert.Info.Expires,
+		}
+
+		existingAlert.History = append([]SIREN.SirenAlertHistory{historyEntry}, existingAlert.History...)
+
+		// Update areas if needed
+		for _, area := range alert.Info.Area.Geocodes.UGC {
+			if !slices.Contains(existingAlert.Areas, area) {
+				existingAlert.Areas = append(existingAlert.Areas, area)
+			}
+		}
+
+		// Update the alert in the database
+		_, err = stateCollection.UpdateOne(
+			context.TODO(),
+			bson.M{"identifier": specialID},
+			bson.M{"$set": existingAlert},
+		)
+
+		if err != nil {
+			log.Error("Failed to update special alert", "id", specialID, "worker", workerId, "err", err)
+			return
+		}
+		log.Debug("Special alert updated", "id", specialID, "worker", workerId)
+	}
 }
 
 // Stores the CAP alert in the database
@@ -663,56 +700,53 @@ func storeCap(alert NWS.Alert, shortId string, workerId int) {
 	}
 }
 
-// Deletes any expired alerts 
+// Deletes any expired alerts
 // Is called when alerts come in, so it only clears alerts when alerts come into the db
 func deleteExpiredAlerts(expiration time.Duration) {
 	timer := time.NewTicker(expiration)
 	defer timer.Stop()
-		for range timer.C {
-		// Points at first state document
-		cursor, err := stateCollection.Find(context.TODO(), bson.M{})
+	for range timer.C {
+		log.Debug("Checking for expired alerts...")
+		cursor, err := stateCollection.Find(context.TODO(), bson.M{"state": "Active", "expires": bson.M{"$lt": time.Now()}})
 		if err != nil {
-			log.Error("Error during Find: ", err)
-			return
+			log.Error("Find failed:", err)
+			continue
 		}
-		defer cursor.Close(context.TODO())
-		// Go through expired state documents
+
 		for cursor.Next(context.TODO()) {
 			var alert SIREN.SirenAlert
-			if err := cursor.Decode(&alert); err != nil { log.Error(err) }
+			if err := cursor.Decode(&alert); err != nil {
+				log.Error(err)
+				continue
+			}
 
-			// Mutex lock
 			alertLock := getLock(alert.Identifier)
-			log.Debug("Attempting to aquire mutex lock in Delete", "id", alert.Identifier)
-			// Block until the lock becomes available and then acquire it
+			log.Debug("Attempting to aquire mutex lock in delete", "id", alert.Identifier)
 			alertLock.mu.Lock()
 			log.Debug("Worker has now acquired lock on alert", "id", alert.Identifier)
-			defer alertLock.mu.Unlock()
 
-			// Checks if alert is expired then adds alert.history.capID to string arry
-			if alert.Expires.Before(time.Now()) {
-				// For loop since history is array 
-				for _, h := range alert.History {
-					deleteResult, err := alertsCollection.DeleteOne(context.TODO(), bson.M {"identifier": h.CapID})
-					if err != nil { log.Error("Delete result alerts collection: ", err) }
-					if deleteResult != nil { log.Debug("Deleted alerts", "count", deleteResult.DeletedCount)	
-					} else { log.Info("No alerts to delete.") }
-				}
-				// Update alert state to inactive
-				alert.State = "Inactive"
-				//Upsert the alert in the database
-				_, err = stateCollection.UpdateOne(
-					context.TODO(),
-					bson.M{"identifier": alert.Identifier},
-					bson.M{"$set": alert},
-					options.UpdateOne().SetUpsert(true),
-				)
-				if err != nil { log.Error("Failed to upsert the alert in the database", "id", alert.Identifier, "err", err) }
-				log.Debug("Alert was upserted to the database", "state", alert.State, "id", alert.Identifier, )
+			alert.State = "Expired"
+
+			_, err = stateCollection.UpdateOne(
+				context.TODO(),
+				bson.M{"identifier": alert.Identifier},
+				bson.M{"$set": bson.M{
+					"state":           alert.State,
+					"lastUpdatedTime": time.Now(),
+				}},
+			)
+
+			if err != nil {
+				log.Error("Failed to update the alert in the database", "id", alert.Identifier, "err", err)
 			}
+			log.Debug("Alert was expired to the database", "state", alert.State, "id", alert.Identifier)
+
+			alertLock.mu.Unlock()
 		}
+
+		cursor.Close(context.TODO())
 	}
-}	
+}
 
 // Handles parsing the alert JSON and processing it.
 // This is the main entry point for the alert processing logic.

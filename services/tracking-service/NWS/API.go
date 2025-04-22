@@ -34,3 +34,16 @@ type CapParametersData struct {
 	VTEC              []string `json:"VTEC"`
 	ExpiredReferences []string `json:"expiredReferences"`
 }
+
+/**============================================
+ *               Helper Functions
+ *=============================================**/
+
+// Converts a slice of NWS.Reference to a slice of strings by extracting the Identifier field.
+func ConvertReferencesToStrings(references []Reference) []string {
+	var result []string
+	for _, ref := range references {
+		result = append(result, ref.Identifier)
+	}
+	return result
+}

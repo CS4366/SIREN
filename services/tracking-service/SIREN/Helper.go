@@ -29,23 +29,23 @@ func GetCanonicalIdentifier(vtec *NWS.VTEC) string {
 
 // GenerateSpecialAlertID creates a unique ID for alerts without VTEC
 func GenerateSpecialAlertID(alert NWS.Alert) string {
-    // Extract useful identifiers from the alert
-    office := ""
-    if alert.Info.Parameters != nil && alert.Info.Parameters.AWIPSidentifier != "" {
-        parts := strings.Split(alert.Info.Parameters.AWIPSidentifier, "-")
-        if len(parts) >= 1 {
-            office = parts[0]
-        }
-    }
-    
-    eventCode := alert.Info.EventCode.NWS
-    if eventCode == "" {
-        eventCode = "UNK" // Unknown if not available
-    }
-    
-    // Use event code + office + sent time as unique identifier
-    sentTime := alert.Sent.Format("20060102T150405")
-    return fmt.Sprintf("SPECIAL-%s-%s-%s", eventCode, office, sentTime)
+	// Extract useful identifiers from the alert
+	office := ""
+	if alert.Info.Parameters != nil && alert.Info.Parameters.AWIPSidentifier != "" {
+		parts := strings.Split(alert.Info.Parameters.AWIPSidentifier, "-")
+		if len(parts) >= 1 {
+			office = parts[0]
+		}
+	}
+
+	eventCode := alert.Info.EventCode.NWS
+	if eventCode == "" {
+		eventCode = "UNK" // Unknown if not available
+	}
+
+	// Use event code + office + sent time as unique identifier
+	sentTime := alert.Sent.Format("20060102T150405")
+	return fmt.Sprintf("%s-%s-%s", eventCode, office, sentTime)
 }
 
 // Gets a shortened identifier from the alert, mainly for logging purposes
