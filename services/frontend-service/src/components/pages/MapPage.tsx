@@ -120,6 +120,27 @@ const MapPage = () => {
       });
   };
 
+  const BASE_URL =
+    `https://nowcoast.noaa.gov/geoserver/observations/weather_radar/ows` +
+    `?service=WMS&version=1.3.0&request=GetMap` +
+    `&layers=base_reflectivity_mosaic` +
+    `&styles=` +
+    `&bbox={bbox-epsg-3857}` +
+    `&width=256&height=256` +
+    `&crs=EPSG:3857` +
+    "&transparent=true" +
+    `&format=image/png`;
+
+  const tiles = [`${BASE_URL}`];
+
+  const rasterLayer: LayerProps = {
+    id: "weather-radar",
+    type: "raster",
+    paint: {
+      "raster-opacity": 0.4,
+    },
+  };
+
   return (
     <div className="relative h-full w-full">
       <div className="absolute flex flex-row mt-2 ml-3 h-2/10 w-[98%] p-5 justify-between items-center bg-[#283648] rounded-2xl z-10">
@@ -164,6 +185,14 @@ const MapPage = () => {
           e.target.triggerRepaint();
         }}
       >
+        <Source
+          id="noaa-radar-source"
+          type="raster"
+          tiles={tiles}
+          tileSize={256}
+        >
+          <Layer {...rasterLayer} />
+        </Source>
         <Source id="alert-polygons" type="geojson" data={combinedFeatures}>
           <Layer {...alertFillLayer} />
           <Layer {...alertLineLayer} />

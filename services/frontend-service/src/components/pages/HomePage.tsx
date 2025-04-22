@@ -27,6 +27,40 @@ import {
 import { Alert as HeroAlert } from "@heroui/react";
 import { AnimatePresence, motion } from "framer-motion";
 
+export function tile2bbox(x, y, z) {
+  const tile2lon = (x, z) => (x / 2 ** z) * 360 - 180;
+  const tile2lat = (y, z) => {
+    const n = Math.PI - (2 * Math.PI * y) / 2 ** z;
+    return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+  };
+
+  const minLon = tile2lon(x, z);
+  const maxLon = tile2lon(x + 1, z);
+  const minLat = tile2lat(y + 1, z);
+  const maxLat = tile2lat(y, z);
+
+  // convert to Web Mercator (EPSG:3857)
+  const project = (lonOrLat) => {
+    if (Math.abs(lonOrLat) > 90) {
+      // longitude
+      return (lonOrLat * 20037508.34) / 180;
+    } else {
+      // latitude
+      const rad = (lonOrLat * Math.PI) / 180;
+      return (
+        Math.log(Math.tan(Math.PI / 4 + rad / 2)) * (20037508.34 / Math.PI)
+      );
+    }
+  };
+
+  return [
+    project(minLon),
+    project(minLat),
+    project(maxLon),
+    project(maxLat),
+  ].join(",");
+}
+
 interface SelectedSirenAlert {
   longitude: number;
   latitude: number;
@@ -464,6 +498,27 @@ const HomePage = () => {
     });
   };
 
+  const BASE_URL =
+    `https://nowcoast.noaa.gov/geoserver/observations/weather_radar/ows` +
+    `?service=WMS&version=1.3.0&request=GetMap` +
+    `&layers=base_reflectivity_mosaic` +
+    `&styles=` +
+    `&bbox={bbox-epsg-3857}` +
+    `&width=256&height=256` +
+    `&crs=EPSG:3857` +
+    "&transparent=true" +
+    `&format=image/png`;
+
+  const tiles = [`${BASE_URL}`];
+
+  const rasterLayer: LayerProps = {
+    id: "weather-radar",
+    type: "raster",
+    paint: {
+      "raster-opacity": 0.4,
+    },
+  };
+
   // Render the HomePage component
   return (
     <div className="flex h-full w-full flex-col bg-[#283648] text-white items-start md:m-5 lg:m-5 xl:m-5 overflow-y-auto">
@@ -725,7 +780,14 @@ const HomePage = () => {
                 </div>
               </Popup>
             )}
-
+            <Source
+              id="noaa-radar-source"
+              type="raster"
+              tiles={tiles}
+              tileSize={256}
+            >
+              <Layer {...rasterLayer} />
+            </Source>
             <Source id="alert-polygons" type="geojson" data={combinedFeatures}>
               <Layer {...alertFillLayer}></Layer>
               <Layer {...alertLineLayer}></Layer>
