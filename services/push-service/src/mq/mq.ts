@@ -18,8 +18,7 @@ export const connectToMQ = async (
       queue,
       (msg) => {
         if (msg) {
-          const content = msg.content.toString();
-          onMessage(content);
+          onMessage(msg.content);
           channel.ack(msg);
         }
       },
