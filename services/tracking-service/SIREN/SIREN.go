@@ -6,24 +6,24 @@ import (
 )
 
 type SirenAlertHistory struct {
-	RecievedAt            time.Time      `bson:"recievedAt"`
-	VtecActionDescription string         `bson:"vtecActionDescription"`
-	VtecAction            NWS.ActionCode `bson:"vtecAction"`
-	AppliesTo             []string       `bson:"appliesTo,omitempty"`
-	CapID                 string         `bson:"capID,omitempty"`
-	ExpiresAt             time.Time      `bson:"expiresAt"`
+	RecievedAt            time.Time      `bson:"recievedAt",msgpack:"recievedAt"`
+	VtecActionDescription string         `bson:"vtecActionDescription",msgpack:"vtecActionDescription"`
+	VtecAction            NWS.ActionCode `bson:"vtecAction",msgpack:"vtecAction"`
+	AppliesTo             []string       `bson:"appliesTo,omitempty",msgpack:"appliesTo,omitempty"`
+	CapID                 string         `bson:"capID,omitempty",msgpack:"capID,omitempty"`
+	ExpiresAt             time.Time      `bson:"expiresAt",msgpack:"expiresAt"`
 }
 
 type SirenAlert struct {
-	Identifier         string              `bson:"identifier"`
-	MostRecentCAP      string              `bson:"mostRecentCAP,omitempty"`
-	State              string              `bson:"state"`
-	Expires            time.Time           `bson:"expires"`
-	MostRecentSentTime time.Time           `bson:"mostRecentSentTime"`
-	LastUpdatedTime    time.Time           `bson:"lastUpdatedTime"`
-	UpgradedTo         string              `bson:"upgradedTo,omitempty"`
-	History            []SirenAlertHistory `bson:"history"`
-	Areas              []string            `bson:"areas"`
+	Identifier         string              `bson:"identifier",msgpack:"identifier"`
+	MostRecentCAP      string              `bson:"mostRecentCAP,omitempty",msgpack:"mostRecentCAP,omitempty"`
+	State              string              `bson:"state",msgpack:"state"`
+	Expires            time.Time           `bson:"expires",msgpack:"expires"`
+	MostRecentSentTime time.Time           `bson:"mostRecentSentTime",msgpack:"mostRecentSentTime"`
+	LastUpdatedTime    time.Time           `bson:"lastUpdatedTime",msgpack:"lastUpdatedTime"`
+	UpgradedTo         string              `bson:"upgradedTo,omitempty",msgpack:"upgradedTo,omitempty"`
+	History            []SirenAlertHistory `bson:"history",msgpack:"history"`
+	Areas              []string            `bson:"areas",msgpack:"areas"`
 }
 
 type MiniCAP struct {
@@ -39,13 +39,4 @@ type MiniCAP struct {
 type Rectification struct {
 	History []SirenAlertHistory
 	Areas   []string
-}
-
-type AlertSummary struct {
-	Identifier string    `bson:"identifier"`
-	Expires    time.Time `bson:"expires"`
-	History    []struct {
-		CapID string `bson:"capID"`
-	} `bson:"history"`
-	LastUpdatedTime time.Time `bson:"lastUpdatedTime"`
 }

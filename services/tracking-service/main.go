@@ -484,7 +484,7 @@ func handleAlertHistory(existingAlert *SIREN.SirenAlert, alert NWS.Alert, vtec *
 
 // Processes the alert and updates the database, this is the main meat of the alert processing logic.
 // It is run in a goroutine, and uses a mutex to ensure that only one goroutine can process a given event at a time.
-func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
+func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) (SIREN.SirenAlert, error) {
 	// Generate a unique identifier for the alert based on its VTEC
 	sirenID := SIREN.GetCanonicalIdentifier(vtec)
 
@@ -531,10 +531,10 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 		_, err := stateCollection.InsertOne(context.TODO(), newAlert)
 		if err != nil {
 			log.Error("Failed to insert the alert into the database", "id", sirenID, "worker", workerId, "err", err)
-			return
+			return SIREN.SirenAlert{}, err
 		}
 		log.Debug("Alert is new and added to database.", "id", sirenID, "worker", workerId)
-		return
+		return newAlert, nil
 	}
 
 	// Check if the alert is already in the database
@@ -556,7 +556,7 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 			}
 		} else {
 			log.Error("Failed to insert the alert into the database", "id", sirenID, "worker", workerId, "err", err)
-			return
+			return SIREN.SirenAlert{}, err
 		}
 	}
 
@@ -576,14 +576,14 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) {
 	)
 	if err != nil {
 		log.Error("Failed to upsert the alert in the database", "id", sirenID, "worker", workerId, "err", err)
-		return
+		return SIREN.SirenAlert{}, err
 	}
 	log.Debug("Alert was upserted to the database", "state", existingAlert.State, "id", sirenID, "worker", workerId)
-
+	return existingAlert, nil
 }
 
 // Handles alerts without VTEC codes
-func handleSpecialAlert(alert NWS.Alert, workerId int) {
+func handleSpecialAlert(alert NWS.Alert, workerId int) (SIREN.SirenAlert, error) {
 	// Generate a unique ID for this special alert
 	specialID := SIREN.GenerateSpecialAlertID(alert)
 
@@ -625,13 +625,13 @@ func handleSpecialAlert(alert NWS.Alert, workerId int) {
 			_, err = stateCollection.InsertOne(context.TODO(), newAlert)
 			if err != nil {
 				log.Error("Failed to insert special alert", "id", specialID, "worker", workerId, "err", err)
-				return
+				return SIREN.SirenAlert{}, err
 			}
 			log.Debug("Special alert inserted", "id", specialID, "worker", workerId)
-
+			return newAlert, nil
 		} else {
 			log.Error("Error querying database for special alert", "id", specialID, "worker", workerId, "err", err)
-			return
+			return SIREN.SirenAlert{}, err
 		}
 	} else {
 		// Update existing alert
@@ -670,9 +670,10 @@ func handleSpecialAlert(alert NWS.Alert, workerId int) {
 
 		if err != nil {
 			log.Error("Failed to update special alert", "id", specialID, "worker", workerId, "err", err)
-			return
+			return SIREN.SirenAlert{}, err
 		}
 		log.Debug("Special alert updated", "id", specialID, "worker", workerId)
+		return existingAlert, nil
 	}
 }
 
@@ -770,17 +771,39 @@ func handleAlertMessage(msg []byte, workerId int) {
 	}
 
 	//TODO: Handle SPS (Special Weather Statements) processing
+	var sirenAlert SIREN.SirenAlert
 	if vtec != nil {
 		// It's sort of hidden, but this is where the alert is actually processed
-		handleAlert(alert, vtec, workerId)
+		sirenAlert, err = handleAlert(alert, vtec, workerId)
 	} else {
-		handleSpecialAlert(alert, workerId)
+		sirenAlert, err = handleSpecialAlert(alert, workerId)
 	}
-
+	if err != nil {
+		log.Error("Failed to process the alert", "id", shortId, "worker", workerId, "err", err)
+		return
+	}
 	// Save the CAP alert to the database
 	storeCap(alert, shortId, workerId)
 
-	//TODO: Publish the alert to the live queue
+	serializedAlert, err := msgpack.Marshal(sirenAlert)
+	if err != nil {
+		log.Warn("Failed to marshal the alert to msgpack", "id", shortId, "worker", workerId, "err", err)
+	} else {
+		//TODO: Publish the alert to the live queue
+		err = ch.Publish(
+			"",
+			liveQueue.Name,
+			false,
+			false,
+			ampq.Publishing{
+				ContentType: "application/msgpack",
+				Body:        serializedAlert,
+			},
+		)
+		if err != nil {
+			log.Error("Failed to publish the alert to the live queue", "id", shortId, "worker", workerId, "err", err)
+		}
+	}
 
 	log.Debug("Alert processed successfully, worker is free", "id", shortId, "worker", workerId)
 	alertsProcessed.Inc()
