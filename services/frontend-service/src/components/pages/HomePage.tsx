@@ -454,6 +454,7 @@ const HomePage = () => {
             size="sm"
             onPress={() => {
               setOpenedAlert(alert.alertData);
+              onOpen();
               setSelectedAlert(undefined);
             }}
           >
