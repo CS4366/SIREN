@@ -27,40 +27,6 @@ import {
 import { Alert as HeroAlert } from "@heroui/react";
 import { AnimatePresence, motion } from "framer-motion";
 
-export function tile2bbox(x, y, z) {
-  const tile2lon = (x, z) => (x / 2 ** z) * 360 - 180;
-  const tile2lat = (y, z) => {
-    const n = Math.PI - (2 * Math.PI * y) / 2 ** z;
-    return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
-  };
-
-  const minLon = tile2lon(x, z);
-  const maxLon = tile2lon(x + 1, z);
-  const minLat = tile2lat(y + 1, z);
-  const maxLat = tile2lat(y, z);
-
-  // convert to Web Mercator (EPSG:3857)
-  const project = (lonOrLat) => {
-    if (Math.abs(lonOrLat) > 90) {
-      // longitude
-      return (lonOrLat * 20037508.34) / 180;
-    } else {
-      // latitude
-      const rad = (lonOrLat * Math.PI) / 180;
-      return (
-        Math.log(Math.tan(Math.PI / 4 + rad / 2)) * (20037508.34 / Math.PI)
-      );
-    }
-  };
-
-  return [
-    project(minLon),
-    project(minLat),
-    project(maxLon),
-    project(maxLat),
-  ].join(",");
-}
-
 interface SelectedSirenAlert {
   longitude: number;
   latitude: number;
@@ -627,21 +593,21 @@ const HomePage = () => {
             <AnimatePresence onExitComplete={handleExitComplete}>
               {currentNotification && notificationVisible && (
                 <motion.div
-                  key={currentNotification.identifier}
+                  key={currentNotification.Identifier}
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.5 }}
                 >
                   <HeroAlert
-                    title={currentNotification.event || "Unknown Alert"}
+                    title={currentNotification.Event || "Unknown Alert"}
                     description={`Issued by ${
-                      currentNotification.sender || "Unknown"
+                      currentNotification.Sender || "Unknown"
                     }`}
                     color={
-                      currentNotification.eventCode.charAt(2) === "W"
+                      currentNotification.EventCode.charAt(2) === "W"
                         ? "danger"
-                        : currentNotification.eventCode.charAt(2) === "A"
+                        : currentNotification.EventCode.charAt(2) === "A"
                         ? "warning"
                         : "primary"
                     }

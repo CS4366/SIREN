@@ -21,11 +21,11 @@ export interface AlertHistory {
 }
 
 export interface SirenPushNotification {
-  identifier: string;
-  event: string;
-  eventCode: string;
-  areas: string[];
-  sender: string;
+  Identifier: string;
+  Event: string;
+  EventCode: string;
+  Areas: string[];
+  Sender: string;
 }
 
 // I generated these from: https://www.weather.gov/help-map

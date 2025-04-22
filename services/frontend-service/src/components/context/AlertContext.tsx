@@ -43,19 +43,19 @@ interface AlertContextProps {
 const LIVE_URL =
   import.meta.env.MODE === "production"
     ? "https://siren-live.jaxcksn.dev"
-    : "localhost:4000";
+    : "http://localhost:4000";
 
 // API URL
 const API_URL =
   import.meta.env.MODE === "production"
     ? "https://siren-api.jaxcksn.dev"
-    : "localhost:3030";
+    : "http://localhost:3030";
 
 // GEO URL
 const GEO_URL =
   import.meta.env.MODE === "production"
     ? "https://siren-geo.jaxcksn.dev"
-    : "localhost:6906";
+    : "http://localhost:6906";
 
 const AlertContext = createContext<AlertContextProps | undefined>(undefined);
 
@@ -112,11 +112,15 @@ export const AlertProvider = ({ children }: { children: ReactNode }) => {
 
   // Check if socket is connected
   useEffect(() => {
-    function onLive(msg) {
+    async function onLive(msg) {
       try {
-        const uint8Array = new Uint8Array(msg);
-        const alert = decode(uint8Array) as SirenPushNotification;
-
+        let bytes: Uint8Array;
+        if (msg instanceof Uint8Array) {
+          bytes = msg;
+        } else {
+          bytes = new Uint8Array(msg);
+        }
+        const alert = decode(bytes) as SirenPushNotification;
         notificationQueue.add(alert);
       } catch (error) {
         console.error("Error decoding live message:", error);
