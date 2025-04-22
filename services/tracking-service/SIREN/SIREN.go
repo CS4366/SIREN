@@ -26,6 +26,14 @@ type SirenAlert struct {
 	Areas              []string            `bson:"areas",msgpack:"areas"`
 }
 
+type SirenAlertPushNotification struct {
+	Identifier string   `bson:"identifier",msgpack:"identifier"`
+	Event      string   `bson:"event",msgpack:"event"`
+	Areas      []string `bson:"areas",msgpack:"areas"`
+	Sender     string   `bson:"sender",msgpack:"sender"`
+	EventCode  string   `bson:"code",msgpack:"code"`
+}
+
 type MiniCAP struct {
 	Identifier        string
 	VTEC              NWS.VTEC

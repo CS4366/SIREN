@@ -785,11 +785,16 @@ func handleAlertMessage(msg []byte, workerId int) {
 	// Save the CAP alert to the database
 	storeCap(alert, shortId, workerId)
 
-	serializedAlert, err := msgpack.Marshal(sirenAlert)
+	serializedAlert, err := msgpack.Marshal(SIREN.SirenAlertPushNotification{
+		Identifier: sirenAlert.Identifier,
+		Event:      alert.Info.Event,
+		Areas:      sirenAlert.Areas,
+		Sender:     alert.Info.SenderName,
+		EventCode:  alert.Info.EventCode.NWS,
+	})
 	if err != nil {
 		log.Warn("Failed to marshal the alert to msgpack", "id", shortId, "worker", workerId, "err", err)
 	} else {
-		//TODO: Publish the alert to the live queue
 		err = ch.Publish(
 			"",
 			liveQueue.Name,
@@ -803,6 +808,7 @@ func handleAlertMessage(msg []byte, workerId int) {
 		if err != nil {
 			log.Error("Failed to publish the alert to the live queue", "id", shortId, "worker", workerId, "err", err)
 		}
+		log.Info("Published alert to the live queue", "id", sirenAlert.Identifier, "worker", workerId)
 	}
 
 	log.Debug("Alert processed successfully, worker is free", "id", shortId, "worker", workerId)

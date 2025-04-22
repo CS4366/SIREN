@@ -1,19 +1,14 @@
 import { Route, Routes, useHref, useLocation, useNavigate } from "react-router";
 import "./App.css";
-import { HeroUIProvider, Tab, Tabs } from "@heroui/react";
+import { HeroUIProvider, Tab, Tabs, ToastProvider } from "@heroui/react";
 import HomePage from "./components/pages/HomePage";
 import DataPage from "./components/pages/DataPage";
 import MapPage from "./components/pages/MapPage";
 import SettingsPage from "./components/pages/SettingsPage";
 //import { useTheme } from "@heroui/use-theme";
 import { useWindowSize } from "@uidotdev/usehooks";
-import HomeIconDark from "./assets/HomeIconDark.png";
-import SettingsIconDark from "./assets/SettingsIconDark.png";
-import DataIconDark from "./assets/DataIconDark.png";
-import MapIconDark from "./assets/MapIconDark.png";
 import { SettingsProvider } from "./components/context/SettingsContext";
 import { AlertProvider } from "./components/context/AlertContext";
-
 
 function App() {
   // Needed hooks and variables
@@ -24,44 +19,27 @@ function App() {
 
   return (
     <HeroUIProvider navigate={navigate} useHref={useHref}>
-      <main className={"text-foreground"}>
-        <div className="flex h-screen md:flex-row flex-col w-full bg-[#283648] text-white">
-          <div className="px-4 py-2 flex md:justify-start justify-center md:items-start items-center">
+      <ToastProvider placement="bottom-left" />
+      <main className="dark text-foreground bg-background">
+        <div className="flex h-screen flex-col md:flex-row w-full bg-[#283648] text-white">
+          <div className="px-4 py-2 w-full md:w-auto md:justify-start justify-center md:items-start items-center z-10">
             {/* Nav Bar */}
             <Tabs
-              isVertical={(size.width ?? 1000) > 768}
+              fullWidth={(size.width ?? 1000) < 768}
+              isVertical={(size.width ?? 1000) >= 768}
               selectedKey={pathname}
-              color="default"
-              variant="light"
-              className="justify-center items-center"
+              variant="bordered"
+              className={`light z-10 rounded-2xl ${
+                pathname === "/map" ? "bg-[#283648]" : ""
+              }`}
             >
-              <Tab key="/" href="/" title={
-                <div className="flex items-center text-[#666666]-500">
-                <img src={HomeIconDark} alt="Home" className="w-4 h-4 mr-2" />
-                Home
-                </div>
-              } />
-              <Tab key="/data" href="/data" title={
-              <div className="flex items-center text-[#666666]-500">
-                <img src={DataIconDark} alt="Data" className="w-4 h-4 mr-2" />
-                Data
-              </div>
-              } />
-              <Tab key="/map" href="/map" title={
-              <div className="flex items-center text-[#666666]-500">
-                <img src={MapIconDark} alt="Map" className="w-4 h-4 mr-2" />
-                Map
-              </div>
-              } />
-              <Tab key="/settings" href="/settings" title={
-              <div className="flex items-center text-[#666666]-500">
-                <img src={SettingsIconDark} alt="Settings" className="w-4 h-4 mr-2" />
-                Settings
-              </div>
-              } />
+              <Tab key="/" href="/" title="Home" />
+              <Tab key="/data" href="/data" title="Data" />
+              <Tab key="/map" href="/map" title="Map" />
+              <Tab key="/settings" href="/settings" title="Settings" />
             </Tabs>
           </div>
-          <div className="flex w-full justify-center items-center h-screen">
+          <div className="flex w-full justify-center items-center">
             {/* Router */}
             <SettingsProvider>
               <AlertProvider>

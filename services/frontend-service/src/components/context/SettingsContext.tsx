@@ -1,3 +1,4 @@
+import { useLocalStorage } from "@uidotdev/usehooks";
 import React, { createContext, useContext, useState } from "react";
 
 // Define the types for the context value
@@ -28,11 +29,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({
     longitude: -101.87457,
     latitude: 33.58462,
   });
-  const [mapStyle, setMapStyle] = useState(
+  const [mapStyle, setMapStyle] = useLocalStorage(
+    "mapStyle",
     "mapbox://styles/mapbox/navigation-night-v1"
   );
-  const [borderOpacity, setBorderOpacity] = useState(100);
-  const [fillOpacity, setFillOpacity] = useState(40);
+  const [borderOpacity, setBorderOpacity] = useLocalStorage(
+    "borderOpacity",
+    100
+  );
+  const [fillOpacity, setFillOpacity] = useLocalStorage("fillOpacity", 40);
 
   return (
     <SettingsContext.Provider

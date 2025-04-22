@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { io } from "socket.io-client";
+import { useState } from "react";
 import {
   Button,
   Switch,
@@ -11,28 +10,15 @@ import {
   DropdownMenu,
   DropdownSection,
   DropdownItem,
+  Input,
 } from "@heroui/react";
 import { useSettings } from "../context/SettingsContext";
-
-const LIVE_URL =
-  import.meta.env.MODE === "production"
-    ? "https://siren-live.jaxcksn.dev"
-    : "http://localhost:4000";
-
-const socket = io(LIVE_URL, {
-  autoConnect: false,
-});
-
-const API_URL =
-  import.meta.env.MODE === "production"
-    ? "https://siren-api.jaxcksn.dev"
-    : "http://localhost:3030";
+import { useAlertContext } from "../context/AlertContext";
 
 // SettingsPage component
 const SettingsPage = () => {
-  // State variables for push and API connection status
-  const [isPushConnected, setIsPushConnected] = useState(socket.connected);
-  const [isAPIConnected, setIsAPIConnected] = useState(false);
+  const { isPushConnected, isAPIConnected } = useAlertContext();
+
   const { setCoordinates } = useSettings();
   const { setMapStyle } = useSettings();
   const { setBorderOpacity } = useSettings();
@@ -111,45 +97,6 @@ const SettingsPage = () => {
     { id: 7, name: "Special Weather Event" },
   ];
 
-  // Socket Handling and Setup
-  useEffect(() => {
-    socket.connect();
-
-    return () => {
-      socket.disconnect();
-    };
-  }, []);
-
-  // Check if API is connected
-  useEffect(() => {
-    fetch(API_URL).then((res) => {
-      if (res.ok) {
-        setIsAPIConnected(true);
-      } else {
-        setIsAPIConnected(false);
-      }
-    });
-  }, []);
-
-  // Check if socket is connected
-  useEffect(() => {
-    function onConnect() {
-      setIsPushConnected(true);
-    }
-
-    function onDisconnect() {
-      setIsPushConnected(false);
-    }
-
-    socket.on("connect", onConnect);
-    socket.on("disconnect", onDisconnect);
-
-    return () => {
-      socket.off("connect", onConnect);
-      socket.off("disconnect", onDisconnect);
-    };
-  }, []);
-
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-[#283648]">
       {/* Header */}
@@ -204,28 +151,24 @@ const SettingsPage = () => {
           <p className="font-bold text-md">User Location</p>
 
           {/* Location Input */}
-          <div className="flex flex-row h-1/10 items-center gap-3">
-            <input
+          <div className="flex flex-row items-center gap-3">
+            <Input
               type="text"
+              label="Zip Code"
+              size="sm"
               placeholder="Enter Zip Code"
-              className="w-3/4 bg-white text-[#71717a] h-full rounded-xl p-3 border-none outline-none"
+              className="w-full h-full rounded-xl light"
               onChange={(e) => setZipCode(e.target.value)}
             />
-            <Button
-              className="h-full w-1/4 border border-white bg-white text-[#71717a] text-xs sm:text-xs md:text:xs lg:text-md xl:text-md p-2"
-              onClick={handleLocationChange}
-            >
+            <Button onPress={handleLocationChange} className="light">
               Use Location
             </Button>
           </div>
-          <p className="font-light text-xs text-[#71717a]">
-            Default location for the user
-          </p>
 
           {/* Push Notifications Input */}
           <p className="font-bold text-md mt-2">Push Notifications</p>
           <div className="flex flex-row items-center gap-3">
-            <Switch defaultChecked={false} color="success" />
+            <Switch defaultChecked={false} color="success" className="light" />
             <label className="text-sm font-bold">
               Enable Browser Push Notifications
             </label>
@@ -233,11 +176,12 @@ const SettingsPage = () => {
 
           {/* Map Input */}
           <h1 className="font-bold text-md mt-2">Map Settings</h1>
-          <p className="text-sm">Map Basemap</p>
+
           <Select
-            label="Select a Map"
+            label="Basemap Style"
             variant="bordered"
-            className="w-full h-auto border border-[#71717a] rounded-2xl"
+            size="sm"
+            className="w-full rounded-2xl"
             onChange={(e) => handleMapStyleChange(e.target.value)}
           >
             {mapStyles.map((map) => (
@@ -333,29 +277,30 @@ const SettingsPage = () => {
           <p className="font-light text-md m-3">
             SIREN was built with all weather data coming from the National
             Weather Service (NWS) and the National Oceanic and Atmospheric
-            Administration (NOAA) via the NWWS OI. The maps were built using 
-            Mapbox. Zip code data was gathered using the Zippopotam.us API. 
-            We also ask that if you use our public API or Push Service for 
-            your own projects to give us credit.
+            Administration (NOAA) via the NWWS OI. The maps were built using
+            Mapbox. Zip code data was gathered using the Zippopotam.us API. We
+            also ask that if you use our public API or Push Service for your own
+            projects to give us credit.
           </p>
           <h1 className="font-bold text-lg m-3">About SIREN</h1>
-            <p className="font-light text-md m-3">
-            SIREN was developed by Texas Tech University students to ingest 
-            and disseminate weather alerts from the NWWS OI. The frontend was 
-            built using React, TypeScript and Tailwind CSS. The backend, which 
-            is composed of microservices and helper services, was built using
-            with a mixture of GoLang, and TypeScript. All data is stored in a 
-            NoSQL database (MongoDB). If you wish to learn more about the 
-            architecture of SIREN or wish to use our services, please visit our &nbsp;  
-            <a 
-              href="https://github.com/CS4366/SIREN" 
-              target="_blank" 
-              rel="noopener noreferrer" 
+          <p className="font-light text-md m-3">
+            SIREN was developed by Texas Tech University students to ingest and
+            disseminate weather alerts from the NWWS OI. The frontend was built
+            using React, TypeScript and Tailwind CSS. The backend, which is
+            composed of microservices and helper services, was built using with
+            a mixture of GoLang, and TypeScript. All data is stored in a NoSQL
+            database (MongoDB). If you wish to learn more about the architecture
+            of SIREN or wish to use our services, please visit our &nbsp;
+            <a
+              href="https://github.com/CS4366/SIREN"
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-blue-500 underline"
             >
               GitHub
-            </a>.
-            </p>
+            </a>
+            .
+          </p>
         </div>
       </div>
     </div>

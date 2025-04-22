@@ -1,13 +1,5 @@
 //import { useState } from "react";
-import {
-  Button,
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerBody,
-  DrawerFooter,
-  useDisclosure,
-} from "@heroui/react";
+import { Button } from "@heroui/react";
 import ClockIcon from "../../assets/clock-icon.png";
 import PinIcon from "../../assets/pin-icon.png";
 
@@ -18,19 +10,13 @@ function truncate(str, maxLength) {
 // Alert component
 const Alert = ({
   alertType,
-  alertIssue,
-  alertStartTime,
   alertEndTime,
-  alertDescription,
-  alertInstructions,
   alertAreas,
-  alertHistory,
   color,
   onShowOnMap,
+  onShowDetails,
 }: AlertProps) => {
   // Drawer dependdencies
-  const { isOpen, onOpen, onOpenChange } = useDisclosure();
-
 
   return (
     // Alert component
@@ -64,65 +50,15 @@ const Alert = ({
         {/* Button To Expand Alert Details */}
         <Button
           className="h-2/3 w-full border border-white bg-white text-[#283648] text-xs p-2"
-          onPress={onOpen}
+          onPress={onShowDetails}
         >
           View Details
         </Button>
-        {/* Drawer Expands on Click */}
-        <Drawer
-          isOpen={isOpen}
-          onOpenChange={onOpenChange}
-          placement="left"
-          size="xl"
-          backdrop="transparent"
-        >
-          <DrawerContent className="bg-[#283648] text-white">
-            {(onClose) => (
-              <>
-                {/* Drawer Header */}
-                <DrawerHeader className="flex flex-col gap-1 font-bold text-3xl">
-                  {/* Header Info */}
-                  <div className="flex flex-row items-center">
-                    {alertType}
-                    <div
-                      className="mx-1 w-7 h-7 ml-3 rounded-full"
-                      style={{ backgroundColor: color }}
-                    />
-                  </div>
-                </DrawerHeader>
-                {/* Drawer Body */}
-                <DrawerBody>
-                  {/* Drawer Body Info (Needs to be modularized once API is finished) */}
-                  <p>{alertIssue}</p>
-                  <p>
-                    Issued at {new Date(alertStartTime).toLocaleString("en-US")}{" "}
-                    | Expires at{" "}
-                    {new Date(alertEndTime).toLocaleString("en-US")}
-                  </p>
-                  <h4 className="font-bold text-xl">Alert Description:</h4>
-                  <p>{alertDescription}</p>
-                  <h4 className="font-bold text-xl">Safety Instructions:</h4>
-                  <p>{alertInstructions}</p>
-                  <h4 className="font-bold text-xl">Alert History:</h4>
-                  {alertHistory.map((history, index) => (
-                    <div key={index} className="flex flex-col">
-                      <p className="font-bold">{history}</p>
-                      <p>{new Date(alertStartTime).toLocaleString("en-US")}</p>
-                    </div>
-                  ))}
-                </DrawerBody>
-                {/* Drawer Footer */}
-                <DrawerFooter>
-                  <Button color="danger" variant="light" onPress={onClose}>
-                    Close
-                  </Button>
-                </DrawerFooter>
-              </>
-            )}
-          </DrawerContent>
-        </Drawer>
         {/* Button To Show Alert on Map (Maybe zoom in on area to implement)*/}
-        <Button className="h-2/3 w-full text-white  border border-white bg-transparent text-xs p-2" onPress={onShowOnMap} >
+        <Button
+          className="h-2/3 w-full text-white  border border-white bg-transparent text-xs p-2"
+          onPress={onShowOnMap}
+        >
           Show on Map
         </Button>
       </div>
@@ -135,13 +71,9 @@ export default Alert;
 // Alert component props
 interface AlertProps {
   alertType: string;
-  alertIssue: string;
   alertAreas: string;
-  alertStartTime: string;
   alertEndTime: string;
-  alertDescription: string[];
-  alertInstructions: string;
-  alertHistory: string[];
   color: string;
   onShowOnMap: () => void;
+  onShowDetails: () => void;
 }

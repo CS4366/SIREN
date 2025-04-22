@@ -9,6 +9,7 @@ export interface SirenAlert {
   history: AlertHistory[];
   areas: string[];
   capInfo: any;
+  expires: Date;
 }
 
 export interface AlertHistory {
@@ -17,6 +18,14 @@ export interface AlertHistory {
   vtecAction: number;
   appliesTo: string[];
   capId: string;
+}
+
+export interface SirenPushNotification {
+  identifier: string;
+  event: string;
+  eventCode: string;
+  areas: string[];
+  sender: string;
 }
 
 // I generated these from: https://www.weather.gov/help-map

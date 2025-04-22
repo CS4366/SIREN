@@ -7,3 +7,7 @@
 .mapboxgl-popup-tip {
   border-bottom-color: #242424 !important;
 }
+
+html {
+  background-color: #283648 !important;
+}
