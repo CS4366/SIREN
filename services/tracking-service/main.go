@@ -745,6 +745,7 @@ func deleteExpiredAlerts(expiration time.Duration) {
 		}
 
 		cursor.Close(context.TODO())
+		log.Info("Expired alerts deleted from the database...")
 	}
 }
 
