@@ -219,6 +219,38 @@ func CreateGeometryForActives() (geojson.FeatureCollection, error) {
 	return geoJSON, nil
 }
 
+func CreateGeometryForMultiple(alertIds []string) (geojson.FeatureCollection, error) {
+	var alerts []SIREN.SirenAlert
+	cursor, err := stateCollection.Find(context.TODO(), bson.M{"identifier": bson.M{"$in": alertIds}})
+	if err != nil {
+		log.Error("Failed to find alerts in mongo", "err", err)
+		return geojson.FeatureCollection{}, err
+	}
+	defer cursor.Close(context.TODO())
+
+	if err := cursor.All(context.TODO(), &alerts); err != nil {
+		log.Error("Failed to decode alerts", "err", err)
+		return geojson.FeatureCollection{}, err
+	}
+
+	var geometries []SIREN.AlertGeometry
+	for _, alert := range alerts {
+		geometry, err := CalculateGeometry(alert.Areas, alert.Identifier)
+		if err != nil {
+			log.Error("Failed to calculate geometry for alert", "alertId", alert.Identifier, "err", err)
+			continue
+		}
+		geometries = append(geometries, geometry)
+	}
+
+	if len(geometries) == 0 {
+		return geojson.FeatureCollection{}, fmt.Errorf("no valid geometries created for alertIds: %v", alertIds)
+	}
+
+	geojson := SIREN.CreateGeoJSON(geometries)
+	return geojson, nil
+}
+
 /**============================================
  *             MongoDB Connection
  *=============================================**/
@@ -262,6 +294,70 @@ func HandleGeoRequest(res http.ResponseWriter, req *http.Request) {
 	res.WriteHeader(http.StatusOK)
 
 	res.Write(data)
+}
+
+func HandleSingleGeoRequest(res http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(res, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var alertIds []string
+	if err := json.NewDecoder(req.Body).Decode(&alertIds); err != nil {
+		http.Error(res, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if len(alertIds) == 0 {
+		http.Error(res, "No alert IDs provided", http.StatusBadRequest)
+		return
+	}
+
+	geoJSON, err := CreateGeometryForMultiple(alertIds)
+	if err != nil {
+		http.Error(res, "Failed to create geometry", http.StatusInternalServerError)
+		return
+	}
+
+	b, err := json.Marshal(geoJSON)
+	if err != nil {
+		http.Error(res, "Failed to create geometry", http.StatusInternalServerError)
+		return
+	}
+
+	goGeoJSON, err := geojson.UnmarshalFeatureCollection(b)
+	if err != nil {
+		http.Error(res, "Failed to create geometry", http.StatusInternalServerError)
+		return
+	}
+
+	topology := topojson.NewTopology(goGeoJSON, nil)
+	topoJson, err := topology.MarshalJSON()
+	if err != nil {
+		http.Error(res, "Failed to create geometry", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to any
+	var jsonObject map[string]any
+	err = json.Unmarshal(topoJson, &jsonObject)
+	if err != nil {
+		http.Error(res, "Failed to create geometry", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to MsgPack
+	topoData, err = msgpack.Marshal(jsonObject)
+	if err != nil {
+		http.Error(res, "Failed to create geometry", http.StatusInternalServerError)
+		return
+	}
+
+	res.Header().Set("Content-Type", "application/msgpack")
+	res.Header().Set("Access-Control-Allow-Origin", "*")
+	res.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	res.WriteHeader(http.StatusOK)
+	res.Write(topoData)
 }
 
 func ScheduleTopoJSON(duration time.Duration) {
@@ -327,10 +423,6 @@ func ConstructTopoJSON() {
 		return
 	}
 
-	if err != nil {
-		log.Error("Failed to serialize TopoJSON to MsgPack", "err", err)
-		return
-	}
 	log.Debug("Successfully serialized TopoJSON to MsgPack")
 }
 
@@ -346,6 +438,7 @@ func main() {
 	defer ZoneStore.Close()
 
 	http.HandleFunc("/polygons", HandleGeoRequest)
+	http.HandleFunc("/polygon", HandleSingleGeoRequest)
 
 	go ConstructTopoJSON()
 	go ScheduleTopoJSON(1 * time.Minute)

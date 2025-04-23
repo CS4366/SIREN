@@ -10,6 +10,7 @@ type SirenAlert struct {
 	Identifier         string     `bson:"identifier"`
 	MostRecentCAP      string     `bson:"mostRecentCAP,omitempty"`
 	State              string     `bson:"state"`
+	Expires            time.Time  `bson:"expires"`
 	MostRecentSentTime time.Time  `bson:"mostRecentSentTime"`
 	LastUpdatedTime    time.Time  `bson:"lastUpdatedTime"`
 	UpgradedTo         string     `bson:"upgradedTo,omitempty"`

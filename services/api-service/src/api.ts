@@ -255,6 +255,49 @@ app.get("/alerts/today/regions", async (req: Request, res: Response) => {
   }
 });
 
+app.post("/alerts", async (req: Request, res: Response) => {
+  // Check if MongoDB is connected
+  if (!client) {
+    res.status(500).send("MongoDB not connected");
+    return;
+  }
+
+  try {
+    const alertIds = req.body;
+
+    if (!alertIds || !Array.isArray(alertIds) || alertIds.length === 0) {
+      res.status(400).send("No alertIds provided or invalid format");
+      return;
+    }
+
+    const active = await events
+      .aggregate([
+        { $match: { state: "Active", identifier: { $in: alertIds } } },
+        {
+          $lookup: {
+            from: "alerts",
+            localField: "mostRecentCAP",
+            foreignField: "identifier",
+            as: "capInfo",
+          },
+        },
+        { $unwind: "$capInfo" },
+      ])
+      .toArray();
+
+    if (!active || active.length === 0) {
+      res.status(404).send("No alerts found");
+      return;
+    }
+
+    // Send the alerts as a response
+    res.status(200).json(active);
+  } catch (error) {
+    console.error("Error fetching alerts", error);
+    res.status(500).send("Error fetching alerts");
+  }
+});
+
 // Get the 3 most commonly used sendernames from today
 app.get("/alerts/yesterday/regions", async (req: Request, res: Response) => {
   // Check if MongoDB is connected
@@ -309,7 +352,6 @@ app.get("/alerts/yesterday/regions", async (req: Request, res: Response) => {
     res.status(500).send("Error fetching top sendernames");
   }
 });
-
 
 // Get all alerts in DB
 app.get("/alerts/all", async (req: Request, res: Response) => {
