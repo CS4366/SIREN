@@ -19,7 +19,7 @@
     "mapbox-gl": "^3.11.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-map-gl": "^8.0.2",
+    "react-map-gl": "^8.0.4",
     "react-router": "^7.4.0",
     "socket.io-client": "^4.8.1",
     "topojson-client": "^3.1.0"

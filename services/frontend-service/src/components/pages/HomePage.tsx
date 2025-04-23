@@ -729,10 +729,9 @@ const HomePage = () => {
             style={{ width: "100%", height: "100%", borderRadius: "1rem" }}
             mapStyle={mapStyle}
             onClick={handleMapClick}
-            interactiveLayerIds={[
-              "alert-polygons-fill",
-              "county-polygons-fill",
-            ]}
+            interactiveLayerIds={["alert-polygons-fill"]}
+            id="map"
+            reuseMaps
           >
             {selectedAlert && selectedAlert.length > 0 && (
               <Popup
@@ -747,6 +746,10 @@ const HomePage = () => {
                 </div>
               </Popup>
             )}
+            <Source id="alert-polygons" type="geojson" data={combinedFeatures}>
+              <Layer {...alertFillLayer}></Layer>
+              <Layer {...alertLineLayer}></Layer>
+            </Source>
             <Source
               id="noaa-radar-source"
               type="raster"
@@ -754,10 +757,6 @@ const HomePage = () => {
               tileSize={256}
             >
               <Layer {...rasterLayer} />
-            </Source>
-            <Source id="alert-polygons" type="geojson" data={combinedFeatures}>
-              <Layer {...alertFillLayer}></Layer>
-              <Layer {...alertLineLayer}></Layer>
             </Source>
           </Map>
           <div className="absolute top-2 left-2 z-10">

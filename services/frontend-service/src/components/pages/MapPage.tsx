@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo } from "react";
+import { useRef, useState, useMemo, useEffect, useId } from "react";
 import { SirenAlert } from "../../model/Alert";
 import "mapbox-gl/dist/mapbox-gl.css";
 import Map, {
@@ -14,6 +14,7 @@ import Map, {
 import { useSettings } from "../context/SettingsContext";
 import { useAlertContext } from "../context/AlertContext";
 import { Input } from "@heroui/react";
+import GeoJSON from "geojson";
 
 interface SelectedSirenAlert {
   longitude: number;
@@ -21,51 +22,70 @@ interface SelectedSirenAlert {
   alertData: SirenAlert;
 }
 
-const MapPage = () => {
-  // Refs for MapboxGL
-  const mapRef = useRef<MapRef | null>(null);
+const MapSources = ({ geojson, countyJson, fill, line, polygons }) => {
+  const { borderOpacity, fillOpacity } = useSettings();
 
-  // Get the coordinates and map style from the context
-  const { coordinates, mapStyle, borderOpacity, fillOpacity } = useSettings();
-
-  // Get the alert data and polygon data from the context
-  const { alertData, polygonGeoJson, countyGeoJson } = useAlertContext();
-
-  // State variable for selected alert
-  const [selectedAlert, setSelectedAlert] = useState<SelectedSirenAlert>();
+  const combined = useMemo<
+    GeoJSON.FeatureCollection<GeoJSON.Geometry, GeoJSON.GeoJsonProperties>
+  >(
+    () => ({
+      type: "FeatureCollection",
+      features: [...geojson.features, ...countyJson.features],
+    }),
+    [geojson, countyJson]
+  );
 
   const alertFillLayer = useMemo<LayerProps>(
     () => ({
-      id: "alert-polygons-fill",
+      id: fill,
       type: "fill",
       paint: {
         "fill-color": ["get", "color"],
         "fill-opacity": fillOpacity / 100,
       },
     }),
-    [fillOpacity]
+    [fillOpacity, fill]
   );
 
   const alertLineLayer = useMemo<LayerProps>(
     () => ({
-      id: "alert-polygons-outline",
+      id: line,
       type: "line",
       paint: {
         "line-color": ["get", "color"],
         "line-opacity": borderOpacity / 100,
       },
     }),
-    [borderOpacity]
+    [borderOpacity, line]
   );
 
-  const combinedFeatures = useMemo<
-    GeoJSON.FeatureCollection<GeoJSON.Geometry, GeoJSON.GeoJsonProperties>
-  >(() => {
-    return {
-      type: "FeatureCollection",
-      features: [...polygonGeoJson.features, ...countyGeoJson.features],
-    };
-  }, [polygonGeoJson, countyGeoJson]);
+  return (
+    <>
+      <Source id={polygons} type="geojson" data={combined}>
+        <Layer {...alertLineLayer} />
+        <Layer {...alertFillLayer} />
+      </Source>
+    </>
+  );
+};
+
+const MapPage = () => {
+  const uid = useId();
+  const srcId = `alert-polygons-${uid}`; // "alert-polygons-:r12f5"
+  const fill = `${srcId}-fill`;
+  const line = `${srcId}-outline`;
+
+  // Refs for MapboxGL
+  const mapRef = useRef<MapRef | null>(null);
+
+  // Get the coordinates and map style from the context
+  const { coordinates, mapStyle } = useSettings();
+
+  // Get the alert data and polygon data from the context
+  const { alertData, polygonGeoJson, countyGeoJson } = useAlertContext();
+
+  // State variable for selected alert
+  const [selectedAlert, setSelectedAlert] = useState<SelectedSirenAlert>();
 
   // Handle map click event
   const handleMapClick = (event: MapMouseEvent) => {
@@ -87,6 +107,14 @@ const MapPage = () => {
       }
     }
   };
+
+  useEffect(() => {
+    // Check if mapRef is defined and current
+    if (mapRef.current) {
+      // Set the map style using the mapRef
+      mapRef.current?.getMap().setStyle(mapStyle); // Force the map to update its style
+    }
+  }, [mapStyle]);
 
   // Handle location change using zip code
   const handleLocationChange = (zipCode: string) => {
@@ -131,16 +159,6 @@ const MapPage = () => {
     "&transparent=true" +
     `&format=image/png`;
 
-  const tiles = [`${BASE_URL}`];
-
-  const rasterLayer: LayerProps = {
-    id: "weather-radar",
-    type: "raster",
-    paint: {
-      "raster-opacity": 0.4,
-    },
-  };
-
   return (
     <div className="relative h-full w-full">
       <div className="absolute flex flex-row mt-2 ml-3 h-2/10 w-[98%] p-5 justify-between items-center bg-[#283648] rounded-2xl z-10">
@@ -179,23 +197,31 @@ const MapPage = () => {
         }}
         mapStyle={mapStyle}
         onClick={handleMapClick}
-        interactiveLayerIds={["alert-polygons-fill", "county-polygons-fill"]}
-        onLoad={(e) => {
-          e.target.resize();
-          e.target.triggerRepaint();
-        }}
+        interactiveLayerIds={[fill, line]}
+        id="map"
+        reuseMaps
       >
+        <MapSources
+          geojson={polygonGeoJson}
+          countyJson={countyGeoJson}
+          polygons={srcId}
+          fill={fill}
+          line={line}
+        />
         <Source
-          id="noaa-radar-source"
+          id={`noaa-radar-source-${uid}`}
           type="raster"
-          tiles={tiles}
+          tiles={[BASE_URL]}
           tileSize={256}
         >
-          <Layer {...rasterLayer} />
-        </Source>
-        <Source id="alert-polygons" type="geojson" data={combinedFeatures}>
-          <Layer {...alertFillLayer} />
-          <Layer {...alertLineLayer} />
+          <Layer
+            id={`big-radar-layer-${uid}`}
+            type="raster"
+            source={`noaa-radar-source-${uid}`}
+            paint={{
+              "raster-opacity": 0.4,
+            }}
+          />
         </Source>
 
         <NavigationControl position="bottom-right" />
