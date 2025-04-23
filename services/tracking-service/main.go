@@ -583,7 +583,7 @@ func handleAlert(alert NWS.Alert, vtec *NWS.VTEC, workerId int) (SIREN.SirenAler
 }
 
 // Handles alerts without VTEC codes
-func handleSpecialAlert(alert NWS.Alert, workerId int) (SIREN.SirenAlert, error) {
+func handleSpecialAlert(alert NWS.Alert, workerId int) (SIREN.SirenAlert, string, error) {
 	// Generate a unique ID for this special alert
 	specialID := SIREN.GenerateSpecialAlertID(alert)
 
@@ -625,13 +625,13 @@ func handleSpecialAlert(alert NWS.Alert, workerId int) (SIREN.SirenAlert, error)
 			_, err = stateCollection.InsertOne(context.TODO(), newAlert)
 			if err != nil {
 				log.Error("Failed to insert special alert", "id", specialID, "worker", workerId, "err", err)
-				return SIREN.SirenAlert{}, err
+				return SIREN.SirenAlert{}, "Error", err
 			}
 			log.Debug("Special alert inserted", "id", specialID, "worker", workerId)
-			return newAlert, nil
+			return newAlert, "New", nil
 		} else {
 			log.Error("Error querying database for special alert", "id", specialID, "worker", workerId, "err", err)
-			return SIREN.SirenAlert{}, err
+			return SIREN.SirenAlert{}, "Error", err
 		}
 	} else {
 		// Update existing alert
@@ -670,10 +670,10 @@ func handleSpecialAlert(alert NWS.Alert, workerId int) (SIREN.SirenAlert, error)
 
 		if err != nil {
 			log.Error("Failed to update special alert", "id", specialID, "worker", workerId, "err", err)
-			return SIREN.SirenAlert{}, err
+			return SIREN.SirenAlert{}, "Error", err
 		}
 		log.Debug("Special alert updated", "id", specialID, "worker", workerId)
-		return existingAlert, nil
+		return existingAlert, "Continued", nil
 	}
 }
 
@@ -771,12 +771,14 @@ func handleAlertMessage(msg []byte, workerId int) {
 	}
 
 	//TODO: Handle SPS (Special Weather Statements) processing
+	var action string
 	var sirenAlert SIREN.SirenAlert
 	if vtec != nil {
 		// It's sort of hidden, but this is where the alert is actually processed
 		sirenAlert, err = handleAlert(alert, vtec, workerId)
+		action = NWS.GetLongStateName(vtec.Action)
 	} else {
-		sirenAlert, err = handleSpecialAlert(alert, workerId)
+		sirenAlert, action, err = handleSpecialAlert(alert, workerId)
 	}
 	if err != nil {
 		log.Error("Failed to process the alert", "id", shortId, "worker", workerId, "err", err)
@@ -791,6 +793,7 @@ func handleAlertMessage(msg []byte, workerId int) {
 		Areas:      sirenAlert.Areas,
 		Sender:     alert.Info.SenderName,
 		EventCode:  alert.Info.EventCode.NWS,
+		Action:     action,
 	})
 	if err != nil {
 		log.Warn("Failed to marshal the alert to msgpack", "id", shortId, "worker", workerId, "err", err)

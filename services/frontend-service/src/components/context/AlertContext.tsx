@@ -4,6 +4,9 @@ import React, {
   useState,
   ReactNode,
   useEffect,
+  useRef,
+  useCallback,
+  useMemo,
 } from "react";
 import {
   AlertColorMap,
@@ -31,30 +34,31 @@ interface AlertContextProps {
     React.SetStateAction<GeoJSON.FeatureCollection>
   >;
   activeAlerts: number;
-  notificationVisible: boolean;
-  setNotificationVisible: React.Dispatch<React.SetStateAction<boolean>>;
+  shownAt: React.MutableRefObject<number | null>;
   currentNotification: SirenPushNotification | null;
   setCurrentNotification: React.Dispatch<
     React.SetStateAction<SirenPushNotification | null>
   >;
+  pushGeoJson: GeoJSON.FeatureCollection;
+  pushAlertList: SirenAlert[];
 }
 
 // Push URL
 const LIVE_URL =
   import.meta.env.MODE === "production"
-    ? "https://siren-live.jaxcksn.dev"
-    : "http://localhost:4000";
+    ? "https://live.sirenwx.io"
+    : "https://localhost:4000";
 
 // API URL
 const API_URL =
   import.meta.env.MODE === "production"
-    ? "https://siren-api.jaxcksn.dev"
-    : "http://localhost:3030";
+    ? "https://api.sirenwx.io"
+    : "https://localhost:3030";
 
 // GEO URL
 const GEO_URL =
   import.meta.env.MODE === "production"
-    ? "https://siren-geo.jaxcksn.dev"
+    ? "https://geo.sirenwx.io"
     : "http://localhost:6906";
 
 const AlertContext = createContext<AlertContextProps | undefined>(undefined);
@@ -83,6 +87,25 @@ export const AlertProvider = ({ children }: { children: ReactNode }) => {
     }
   );
 
+  // Push service connection
+  const [alerts, setAlerts] = useState<Record<string, SirenAlert>>({});
+  const [polys, setPolys] = useState<Record<string, GeoJSON.Feature>>({});
+
+  const pendingIds = useRef<Set<string>>(new Set());
+  const BATCH_WAIT = 800; // ms idle-time before we fire the batch
+  const BATCH_MAX = 25; // never ask the API for more than 25 IDs
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const pushGeoJson = useMemo<GeoJSON.FeatureCollection>(
+    () => ({
+      type: "FeatureCollection",
+      features: Object.values(polys),
+    }),
+    [polys]
+  );
+
+  const pushAlertList = useMemo(() => Object.values(alerts), [alerts]);
+
   // Socket Handling and Setup
   useEffect(() => {
     socket.connect();
@@ -104,11 +127,97 @@ export const AlertProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const notificationQueue = useQueue<SirenPushNotification>();
-
   const [currentNotification, setCurrentNotification] =
     useState<SirenPushNotification | null>(null);
-  const [notificationVisible, setNotificationVisible] =
-    useState<boolean>(false);
+
+  const shownAt = useRef<number | null>(null);
+
+  async function flushBatch() {
+    timer.current = null;
+    const ids = Array.from(pendingIds.current).slice(0, BATCH_MAX);
+    ids.forEach((id) => pendingIds.current.delete(id));
+
+    try {
+      const capRes = await fetch(`${API_URL}/alerts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(ids),
+      });
+      const capData: SirenAlert[] = await capRes.json();
+
+      const geoIds: string[] = [];
+      capData.forEach((alert) => {
+        if (!alert.capInfo.info.area.polygon) {
+          geoIds.push(alert.identifier);
+        }
+      });
+
+      let topo: TopoJSON.Topology | undefined;
+      if (geoIds.length > 0) {
+        const geoRes = await fetch(`${GEO_URL}/polygon`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(geoIds),
+        });
+        const topoBuf = new Uint8Array(await geoRes.arrayBuffer());
+        topo = decode(topoBuf) as TopoJSON.Topology;
+      }
+
+      // merge into caches
+      setAlerts((prev) => {
+        const next = { ...prev };
+        for (const alert of capData) next[alert.identifier] = alert;
+        return next;
+      });
+
+      setPolys((prev) => {
+        const next = { ...prev };
+        for (const alert of capData) {
+          if (!alert.capInfo.info.area.polygon) continue;
+          next[alert.identifier] = {
+            type: "Feature",
+            geometry: alert.capInfo.info.area.polygon,
+            properties: {
+              id: alert.identifier,
+              name: alert.capInfo.info.event,
+              color:
+                AlertColorMap.get(alert.capInfo.info.eventcode.nws) ||
+                "#efefef",
+            },
+          };
+        }
+        if (!topo) return next;
+        const fcs = Object.values(topo.objects).map((o) => feature(topo, o));
+        for (const fc of fcs) {
+          (fc.type === "FeatureCollection" ? fc.features : [fc]).forEach(
+            (f) => {
+              next[f.properties!.id] = {
+                ...f,
+                properties: {
+                  ...f.properties,
+                  name: alerts[f.properties!.id]?.capInfo.info.event,
+                  color:
+                    AlertColorMap.get(
+                      alerts[f.properties!.id]?.capInfo.info.eventcode.nws ?? ""
+                    ) ?? "#efefef",
+                },
+              };
+            }
+          );
+        }
+        return next;
+      });
+    } catch (e) {
+      console.error("batch fetch failed", e);
+    }
+
+    // still more IDs queued? schedule another burst right away
+    if (pendingIds.current.size) flushBatch();
+  }
 
   // Check if socket is connected
   useEffect(() => {
@@ -121,7 +230,17 @@ export const AlertProvider = ({ children }: { children: ReactNode }) => {
           bytes = new Uint8Array(msg);
         }
         const alert = decode(bytes) as SirenPushNotification;
+
         notificationQueue.add(alert);
+
+        if (
+          alert.Action == "New" ||
+          !alertData.find((existing) => alert.Identifier == existing.identifier)
+        ) {
+          pendingIds.current.add(alert.Identifier);
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = setTimeout(flushBatch, BATCH_WAIT);
+        }
       } catch (error) {
         console.error("Error decoding live message:", error);
       }
@@ -153,26 +272,40 @@ export const AlertProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  useEffect(() => {
-    if (!currentNotification && notificationQueue.size > 0) {
-      const next = notificationQueue.first;
-      notificationQueue.remove();
-      if (next) {
+  const tryShow = useCallback(
+    (next: SirenPushNotification) => {
+      const now = Date.now();
+
+      // Nothing on screen yet → show right away.
+      if (!currentNotification) {
+        shownAt.current = now;
         setCurrentNotification(next);
+        return;
       }
-    }
-  }, [notificationQueue.size, currentNotification]);
+
+      // How long has the current banner been up?
+      const elapsed = now - (shownAt.current ?? now);
+
+      // Has it been visible ≥ 10 s?
+      if (elapsed >= 10000) {
+        shownAt.current = now;
+        setCurrentNotification(next);
+      } else {
+        // Need to wait the remaining time, then try again.
+        const waiting = 100000 - elapsed;
+        setTimeout(() => tryShow(next), waiting);
+      }
+    },
+    [currentNotification]
+  );
 
   useEffect(() => {
-    if (!currentNotification) return;
+    if (notificationQueue.size === 0) return;
 
-    setNotificationVisible(true);
-    const hideTimer = setTimeout(() => {
-      setNotificationVisible(false);
-    }, 10000);
-
-    return () => clearTimeout(hideTimer);
-  }, [currentNotification]);
+    const next = notificationQueue.first;
+    notificationQueue.remove();
+    if (next) tryShow(next);
+  }, [notificationQueue.size, currentNotification]);
 
   // Gathering active alerts from the API
   useEffect(() => {
@@ -288,10 +421,11 @@ export const AlertProvider = ({ children }: { children: ReactNode }) => {
         countyGeoJson,
         setCountyGeoJson,
         activeAlerts,
-        notificationVisible,
-        setNotificationVisible,
+        shownAt,
         currentNotification,
         setCurrentNotification,
+        pushGeoJson,
+        pushAlertList,
       }}
     >
       {children}

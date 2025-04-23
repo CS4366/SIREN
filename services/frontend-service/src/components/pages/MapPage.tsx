@@ -13,7 +13,7 @@ import Map, {
 } from "react-map-gl/mapbox";
 import { useSettings } from "../context/SettingsContext";
 import { useAlertContext } from "../context/AlertContext";
-import { Input } from "@heroui/react";
+import { Divider, Input } from "@heroui/react";
 import GeoJSON from "geojson";
 
 interface SelectedSirenAlert {
@@ -22,18 +22,28 @@ interface SelectedSirenAlert {
   alertData: SirenAlert;
 }
 
-const MapSources = ({ geojson, countyJson, fill, line, polygons }) => {
+const MapSources = ({
+  geojson,
+  countyJson,
+  pushJson,
+  fill,
+  line,
+  polygons,
+}) => {
   const { borderOpacity, fillOpacity } = useSettings();
 
   const combined = useMemo<
     GeoJSON.FeatureCollection<GeoJSON.Geometry, GeoJSON.GeoJsonProperties>
-  >(
-    () => ({
+  >(() => {
+    return {
       type: "FeatureCollection",
-      features: [...geojson.features, ...countyJson.features],
-    }),
-    [geojson, countyJson]
-  );
+      features: [
+        ...geojson.features,
+        ...countyJson.features,
+        ...pushJson.features,
+      ],
+    };
+  }, [geojson, countyJson, pushJson]);
 
   const alertFillLayer = useMemo<LayerProps>(
     () => ({
@@ -82,30 +92,65 @@ const MapPage = () => {
   const { coordinates, mapStyle } = useSettings();
 
   // Get the alert data and polygon data from the context
-  const { alertData, polygonGeoJson, countyGeoJson } = useAlertContext();
+  const {
+    alertData,
+    polygonGeoJson,
+    countyGeoJson,
+    pushAlertList,
+    pushGeoJson,
+  } = useAlertContext();
+
+  const alertList = useMemo(() => {
+    return [...pushAlertList, ...alertData];
+  }, [alertData, pushAlertList]);
 
   // State variable for selected alert
-  const [selectedAlert, setSelectedAlert] = useState<SelectedSirenAlert>();
+  const [selectedAlert, setSelectedAlert] = useState<SelectedSirenAlert[]>();
 
-  // Handle map click event
   const handleMapClick = (event: MapMouseEvent) => {
     event.preventDefault();
+    const selected: SelectedSirenAlert[] = [];
 
-    const feature = event.features && event.features[0];
-    // Check if the clicked feature is a polygon
-    if (feature && feature.properties?.id) {
-      const foundAlert = alertData.find(
-        (alert: SirenAlert) => alert.identifier === feature.properties?.id
-      );
-      // If an alert is found, set it as the selected alert
-      if (foundAlert) {
-        setSelectedAlert({
-          longitude: event.lngLat.lng,
-          latitude: event.lngLat.lat,
-          alertData: foundAlert,
-        });
+    if ((event.features ?? []).length > 0) {
+      for (const feature of event.features ?? []) {
+        const foundAlert = alertList.find(
+          (alert: SirenAlert) => alert.identifier === feature.properties?.id
+        );
+
+        if (foundAlert) {
+          //Add to selected alert
+          selected.push({
+            longitude: event.lngLat.lng,
+            latitude: event.lngLat.lat,
+            alertData: foundAlert,
+          });
+        }
       }
+    } else {
+      // If no features are found, reset the selected alert
+      setSelectedAlert(undefined);
+      return;
     }
+    if (selected.length > 0) {
+      setSelectedAlert(selected);
+    } else {
+      setSelectedAlert(undefined);
+    }
+  };
+
+  const renderPopupBody = (data: SelectedSirenAlert[]) => {
+    return data.map((alert) => {
+      return (
+        <div key={alert.alertData.identifier}>
+          <h3>{alert.alertData.capInfo.info.event}</h3>
+          <p>
+            Updated:{" "}
+            {new Date(alert.alertData.lastUpdatedTime).toLocaleString("en-US")}
+          </p>
+          <Divider />
+        </div>
+      );
+    });
   };
 
   useEffect(() => {
@@ -204,6 +249,7 @@ const MapPage = () => {
         <MapSources
           geojson={polygonGeoJson}
           countyJson={countyGeoJson}
+          pushJson={pushGeoJson}
           polygons={srcId}
           fill={fill}
           line={line}
@@ -227,21 +273,17 @@ const MapPage = () => {
         <NavigationControl position="bottom-right" />
         <GeolocateControl position="bottom-right" />
 
-        {selectedAlert && (
+        {selectedAlert && selectedAlert.length > 0 && (
           <Popup
-            longitude={selectedAlert.longitude}
-            latitude={selectedAlert.latitude}
+            longitude={selectedAlert[0].longitude}
+            latitude={selectedAlert[0].latitude}
             anchor="top"
             onClose={() => setSelectedAlert(undefined)}
             closeOnClick={false}
           >
-            <h3>{selectedAlert.alertData.capInfo.info.event}</h3>
-            <p>
-              Updated:{" "}
-              {new Date(selectedAlert.alertData.lastUpdatedTime).toLocaleString(
-                "en-US"
-              )}
-            </p>
+            <div className="flex flex-col">
+              {renderPopupBody(selectedAlert)}
+            </div>
           </Popup>
         )}
       </Map>

@@ -32,6 +32,7 @@ type SirenAlertPushNotification struct {
 	Areas      []string `bson:"areas",msgpack:"areas"`
 	Sender     string   `bson:"sender",msgpack:"sender"`
 	EventCode  string   `bson:"code",msgpack:"code"`
+	Action     string   `bson:"action",msgpack:"action"`
 }
 
 type MiniCAP struct {

@@ -45,8 +45,8 @@ const dateOptions: Intl.DateTimeFormatOptions = {
 // API URL
 const API_URL =
   import.meta.env.MODE === "production"
-    ? "https://siren-api.jaxcksn.dev"
-    : "https://siren-api.jaxcksn.dev";
+    ? "https://api.sirenwx.io"
+    : "http://localhost:3030";
 
 // Home Page Component
 const HomePage = () => {
@@ -66,8 +66,10 @@ const HomePage = () => {
     polygonGeoJson,
     countyGeoJson,
     activeAlerts,
-    notificationVisible,
+    shownAt,
     currentNotification,
+    pushAlertList,
+    pushGeoJson,
     setCurrentNotification,
   } = useAlertContext();
 
@@ -88,6 +90,10 @@ const HomePage = () => {
   // State variables for resize
   const { width } = useWindowSize();
   // State variables for polygons and styles
+
+  const alertList = useMemo(() => {
+    return [...pushAlertList, ...alertData];
+  }, [alertData, pushAlertList]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -125,9 +131,13 @@ const HomePage = () => {
   >(() => {
     return {
       type: "FeatureCollection",
-      features: [...polygonGeoJson.features, ...countyGeoJson.features],
+      features: [
+        ...polygonGeoJson.features,
+        ...countyGeoJson.features,
+        ...pushGeoJson.features,
+      ],
     };
-  }, [polygonGeoJson, countyGeoJson]);
+  }, [polygonGeoJson, countyGeoJson, pushGeoJson]);
 
   // Gathering number of alerts from today including inactive alerts from API
   useEffect(() => {
@@ -286,7 +296,7 @@ const HomePage = () => {
       );
     }
     // If no alerts
-    else if (alertData.length === 0) {
+    else if (alertList.length === 0) {
       return (
         <div className="flex justify-center items-center w-full h-full">
           <p className="text-white text-lg">No active alerts found!</p>
@@ -295,7 +305,7 @@ const HomePage = () => {
     }
     // Map alerted to alert component
     else {
-      return alertData.map((alert: SirenAlert, index: number) => {
+      return alertList.map((alert: SirenAlert, index: number) => {
         return (
           <Alert
             key={index}
@@ -324,7 +334,7 @@ const HomePage = () => {
 
     if ((event.features ?? []).length > 0) {
       for (const feature of event.features ?? []) {
-        const foundAlert = alertData.find(
+        const foundAlert = alertList.find(
           (alert: SirenAlert) => alert.identifier === feature.properties?.id
         );
 
@@ -352,7 +362,7 @@ const HomePage = () => {
   // Filter alert by area
   const filterByArea = (area: string) => {
     // Filter the alert data based on the area input
-    const filteredAlerts = alertData.filter((alert: SirenAlert) =>
+    const filteredAlerts = alertList.filter((alert: SirenAlert) =>
       alert.capInfo.info.area.description.includes(area)
     );
     // If the input is empty, reset to the original alert data
@@ -430,13 +440,6 @@ const HomePage = () => {
           });
         }
       }
-    }
-  };
-
-  const handleExitComplete = () => {
-    if (!notificationVisible) {
-      // Reset the selected alert when the drawer is closed
-      setCurrentNotification(null);
     }
   };
 
@@ -591,20 +594,26 @@ const HomePage = () => {
               Push Notifications: Disconnected
             </span>
           ) : (
-            <AnimatePresence onExitComplete={handleExitComplete}>
-              {currentNotification && notificationVisible && (
+            <AnimatePresence mode="wait">
+              {currentNotification && (
                 <motion.div
                   key={currentNotification.Identifier}
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.5 }}
+                  onAnimationComplete={(def) => {
+                    if (def === "exit") {
+                      setCurrentNotification(null);
+                      shownAt.current = null;
+                    }
+                  }}
                 >
                   <HeroAlert
                     title={currentNotification.Event || "Unknown Alert"}
-                    description={`Issued by ${
-                      currentNotification.Sender || "Unknown"
-                    }`}
+                    description={`Action: ${
+                      currentNotification.Action ?? "Unknown"
+                    } | Sender: ${currentNotification.Sender || "Unknown"}`}
                     color={
                       currentNotification.EventCode.charAt(2) === "W"
                         ? "danger"
@@ -614,6 +623,13 @@ const HomePage = () => {
                     }
                   />
                 </motion.div>
+              )}
+              {!currentNotification && (
+                <HeroAlert
+                  title="No New Alerts"
+                  description="Live alerts will appear here"
+                  color="default"
+                />
               )}
             </AnimatePresence>
           )}

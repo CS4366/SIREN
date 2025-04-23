@@ -26,6 +26,7 @@ export interface SirenPushNotification {
   EventCode: string;
   Areas: string[];
   Sender: string;
+  Action: string;
 }
 
 // I generated these from: https://www.weather.gov/help-map

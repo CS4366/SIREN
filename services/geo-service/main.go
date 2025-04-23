@@ -263,7 +263,7 @@ func ConnectToMongo() {
 	uri := os.Getenv("MONGO_URI")
 	if uri == "" {
 		log.Warn("MONGO_URI not set. Using default value, this may not work.\n")
-		uri = "mongodb://localhost:27017"
+		uri = "mongodb://192.168.0.169:27017"
 	}
 
 	var err error
@@ -297,6 +297,14 @@ func HandleGeoRequest(res http.ResponseWriter, req *http.Request) {
 }
 
 func HandleSingleGeoRequest(res http.ResponseWriter, req *http.Request) {
+	if req.Method == http.MethodOptions {
+		res.Header().Set("Access-Control-Allow-Origin", "*")
+		res.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		res.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		res.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	if req.Method != http.MethodPost {
 		http.Error(res, "Invalid request method", http.StatusMethodNotAllowed)
 		return
