@@ -159,7 +159,7 @@ jobs:
       - name: Write Summary
         if: steps.changes.outputs.src == 'true'
         run: |
-          echo "Deployed ${{ matrix.app.name }} v${{ steps.semver.outputs.version }} to ghcr.io/cs4366/siren-${{ matrix.app.service }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "Deploy: ${{ matrix.app.name }} v${{ steps.semver.outputs.version }} to ghcr.io/cs4366/siren-${{ matrix.app.service }}:latest" >> $GITHUB_STEP_SUMMARY
 
       - name: Write Changed Service to File
         if: steps.changes.outputs.src == 'true'
