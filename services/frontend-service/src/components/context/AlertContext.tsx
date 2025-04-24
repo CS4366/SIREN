@@ -16,7 +16,6 @@ import {
 import { io } from "socket.io-client";
 import { decode } from "@msgpack/msgpack";
 import { feature } from "topojson-client";
-import { addToast } from "@heroui/react";
 import { useQueue } from "@uidotdev/usehooks";
 
 interface AlertContextProps {
@@ -248,13 +247,6 @@ export const AlertProvider = ({ children }: { children: ReactNode }) => {
 
     function onConnect() {
       setIsPushConnected(true);
-      addToast({
-        title: "Connected to Push Service",
-        description: "You are now receiving live alerts.",
-        timeout: 5000,
-        color: "success",
-      });
-
       socket.on("live", onLive);
     }
 
