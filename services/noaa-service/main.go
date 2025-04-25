@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"io"
 	"noaaService/CAP"
 	"regexp"
 	"strings"
@@ -162,8 +164,14 @@ func processChatroomMessages(client *xmpp.Client, alerts chan string) error {
 	for {
 		stanza, err := client.Recv()
 		if err != nil {
+			if errors.Is(err, io.EOF) ||
+				strings.Contains(err.Error(), "unexpected EOF") {
+				return err
+			}
+
 			log.Printf("Error receiving XMPP stanza: %v", err)
-			continue // Don't return; just skip the invalid stanza
+			time.Sleep(500 * time.Millisecond)
+			continue
 		}
 		switch v := stanza.(type) {
 		// There is a lot of XMPP stanza parsing here, but the important part is that we are looking for CAP alerts
