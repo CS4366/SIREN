@@ -74,10 +74,11 @@ func GetLongStateName(actionCode ActionCode) string {
 	}
 }
 
+var vtecRegex = regexp.MustCompile(VTEC_REGEX_PATTERN)
+
 func ParseVTEC(vtec string) (*VTEC, error) {
 	//Regex pattern to match the VTEC string
-	re := regexp.MustCompile(VTEC_REGEX_PATTERN)
-	matches := re.FindStringSubmatch(vtec)
+	matches := vtecRegex.FindStringSubmatch(vtec)
 	if len(matches) != 9 {
 		return nil, errors.New("invalid VTEC string format")
 	}

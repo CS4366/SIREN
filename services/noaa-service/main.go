@@ -21,6 +21,8 @@ import (
 	"github.com/vmihailenco/msgpack"
 )
 
+var capAlertRE = regexp.MustCompile(`(?s)(?:<!\[CDATA\[.*?)(<alert.*?>.*?</alert>)(?:.*?\]\]?)`)
+
 func debugLog(msg string) {
 	if os.Getenv("ENV") != "PROD" {
 		log.Println(msg)
@@ -193,8 +195,7 @@ func processChatroomMessages(client *xmpp.Client, alerts chan string) error {
 							// Grab the content of the <x> element
 							content := child.InnerXML
 							// Find the <alert> element within the content
-							re := regexp.MustCompile(`(?s)(?:<!\[CDATA\[.*?)(<alert.*?>.*?</alert>)(?:.*?\]\]>)`)
-							matches := re.FindStringSubmatch(content)
+							matches := capAlertRE.FindStringSubmatch(content)
 							if len(matches) < 2 {
 								log.Println("No <alert> element found in content.")
 								continue
