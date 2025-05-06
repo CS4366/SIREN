@@ -72,3 +72,22 @@ Our pre-presentation stage 2 meeting was on March 26th, in which we finished up 
 - Discussed microservice implementation, especially the Frontend
 - Gave roles for implementation and organized first 2-week sprint
 
+##### April 9th, 2025
+
+Our post sprint one meeting was on April 9th, in which we discussed the outcomes and goals of the next sprint.
+
+- Finished scaffolding of Frontend Service
+- Finished NOAA Service
+- Developed operational version of the other services
+- Discussed addition of GEO Service
+- Gave roles for implementation and organized second 2-week sprint
+
+##### April 22th, 2025
+
+Our post sprint two meeting was on April 22th, in which we discussed the outcomes and made our presentation.
+
+- Finished functionality of Frontend Service
+- Finished Push Service, Tracking Service, API Service and GEO Service
+- Made presentation slides for EAB Dinner and in class presentation
+- Discussed the final report, and gave roles to complete it.
+
