@@ -90,4 +90,39 @@ Our post sprint two meeting was on April 22nd, in which we discussed the outcome
 - Finished Push Service, Tracking Service, API Service and GEO Service
 - Made presentation slides for EAB Dinner and in class presentation
 - Discussed the final report, and gave roles to complete it.
+---
+### Validation Results
 
+Since our project focused on creating an endpoint for public and organizational access to real-time weather alerts, most of our validation was performed manually across various services to ensure functionality and performance. We would have liked to implement unit testing to ensure every service is working as intended, but we did not have enough time and thus relied on manual testing in order to validate our services were working as intended. Here is a brief breakdown of the testing we were able to perform in order to validate our system and the results:
+
+#### Frontend Validation
+
+- Tested React components with edge cases to verify proper error handling and UI responses.
+- Lightly load-tested the frontend during a high-alert weather day (via the NWS Lubbock office) to assess performance under increased alert volume.
+
+#### GeoJSON Validation
+
+- Confirmed that weather alert polygons were rendered correctly on the frontend map.
+- Observed no performance degradation during rendering, indicating the service performs efficiently.
+
+#### Push Validation
+
+- Verified successful display of push notifications on the frontend.
+- Informally benchmarked alert dissemination speed and found it outperformed several major weather apps, including the Weather Service app, The Weather Channel, AccuWeather, and the iOS Weather App.
+
+#### API Validation
+
+- Although we did not implement automated unit testing, we manually verified all core API functionalities.
+- Ensured that CRUD operations functioned correctly, as alerts could be received and historical alerts could be viewed via the frontend.
+
+#### Tracking Validation
+
+- Confirmed that a proper tracking ID's were added to alerts by viewing MongoDB, using the tool Compass.
+- Confirmed that alerts were correctly updated and deleted the same way.
+
+#### NOAA Validation
+
+- Verified that alerts were successfully received in CAP JSON format via the messaging queue, confirming proper integration with NOAA feeds.
+
+#### Results
+While we weren't able to implement unit tests, manual testing showed that our application is working as we intended it to. There are additional features we want to add, but the core functionality of SIREN is there and works as intended, allowing users to view weather alerts on an efficient and optimal platform. 
